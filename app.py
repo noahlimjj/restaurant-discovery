@@ -385,9 +385,9 @@ def restaurants():
         print(f"Processed {len(results)} Google Places results")
         print(f"After filtering: {len(filtered_results)} restaurants")
         
-        # Get photos for top results
-        if filtered_results:
-            filtered_results = get_restaurant_photos(filtered_results[:20])  # Limit to top 20 for photos
+        # Get photos for top results (temporarily disabled to prevent crashes)
+        # if filtered_results:
+        #     filtered_results = get_restaurant_photos(filtered_results[:20])  # Limit to top 20 for photos
         
         # Log search details
         for log_entry in search_log:
