@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <title>The Food Finder - Discover Restaurants & Cafes</title>
     <meta name="description" content="Discover restaurants and cafes near you using Google Maps data">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2.3">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>The Food Finder</h1>
-            <p>Discover restaurants and cafes near you</p>
-            <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">Version 2.1 - Simplified & Fast</p>
+            <h1>🍽️ The Food Finder</h1>
+            <p class="subtitle">Discover restaurants and cafes near you</p>
+            <p class="version">v2.3 - Debug Mode</p>
         </header>
         
         <!-- Location Selection -->
