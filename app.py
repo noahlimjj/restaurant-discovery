@@ -323,11 +323,26 @@ if __name__ == "__main__":
     if is_production:
         # Production: no SSL context, bind to all interfaces
         print(f"Starting Flask app in production mode on port {port}...")
-        app.run(host="0.0.0.0", port=port)
+        app.run(host="0.0.0.0", port=port, debug=False)
     else:
         # Development: use SSL context
         print("Starting Flask app with HTTPS...")
         print(f"Access the app at: https://127.0.0.1:{port}")
         print(f"Test API with: https://127.0.0.1:{port}/restaurants/sf")
         print("Note: You may see a security warning in your browser. Click 'Advanced' and 'Proceed to localhost' to continue.")
-        app.run(ssl_context=ssl_context, host="0.0.0.0", port=port) 
+        
+        # Create SSL context for development
+        cert_file = "cert.pem"
+        key_file = "key.pem"
+        
+        if not os.path.exists(cert_file) or not os.path.exists(key_file):
+            print("Creating self-signed SSL certificate...")
+            cert_file, key_file = create_self_signed_cert()
+            if cert_file and key_file:
+                print("SSL certificate created successfully!")
+            else:
+                print("Failed to create SSL certificate. Starting with HTTP...")
+                app.run(debug=True, host="0.0.0.0", port=port)
+                exit()
+        
+        app.run(debug=True, host="0.0.0.0", port=port, ssl_context=(cert_file, key_file)) 
