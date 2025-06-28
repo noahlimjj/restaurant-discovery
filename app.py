@@ -78,11 +78,16 @@ def search_google_places_sync(location, filters):
     search_log = []
     
     try:
+        # Ensure location is properly formatted
+        lat = float(location['lat'])
+        lng = float(location['lng'])
+        location_str = f"{lat},{lng}"
+        
         # Nearby search
         url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
         params = {
             'key': google_api_key,
-            'location': f"{location['lat']},{location['lng']}",
+            'location': location_str,
             'radius': radius,
             'type': 'restaurant'
         }
@@ -106,7 +111,7 @@ def search_google_places_sync(location, filters):
         for place in data.get('results', []):
             # Calculate distance
             from math import radians, cos, sin, asin, sqrt
-            lat1, lon1 = location['lat'], location['lng']
+            lat1, lon1 = lat, lng
             lat2, lon2 = place['geometry']['location']['lat'], place['geometry']['location']['lng']
             
             # Haversine formula
