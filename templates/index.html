@@ -166,6 +166,12 @@
         log(`🔍 Starting geolocation request (${highAccuracy ? 'high' : 'low'} accuracy)...`);
         
         if (navigator.geolocation) {
+            const options = {
+                enableHighAccuracy: highAccuracy,
+                timeout: 30000, // Increased timeout to 30 seconds
+                maximumAge: 300000 // 5 minutes
+            };
+            
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     currentLocation = {
@@ -176,35 +182,68 @@
                     searchBtn.disabled = false;
                     log(`✅ Location obtained: ${currentLocation.lat}, ${currentLocation.lng}`);
                     log(`📊 Accuracy: ${position.coords.accuracy}m`);
+                    log(`⏱️ Timestamp: ${new Date(position.timestamp).toLocaleString()}`);
                 },
                 function(error) {
                     let errorMessage = 'Unknown error';
+                    let suggestions = [];
+                    
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
-                            errorMessage = 'Permission denied. Please allow location access in your browser settings.';
+                            errorMessage = 'Permission denied. Please allow location access.';
+                            suggestions = [
+                                'Click the location icon in your browser address bar',
+                                'Go to browser settings → Privacy → Location',
+                                'Try refreshing the page and allowing location access'
+                            ];
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            errorMessage = 'Location information unavailable. Try: 1) Check your internet connection 2) Enable location services on your device 3) Try low accuracy mode';
+                            errorMessage = 'Location information unavailable.';
+                            suggestions = [
+                                'Check your internet connection',
+                                'Enable location services on your device',
+                                'Try low accuracy mode (button below)',
+                                'Use location search instead (Search Location tab)',
+                                'Check if you\'re on HTTPS (required for geolocation)'
+                            ];
                             break;
                         case error.TIMEOUT:
-                            errorMessage = 'Location request timed out. Try again or use low accuracy mode.';
+                            errorMessage = 'Location request timed out.';
+                            suggestions = [
+                                'Try again with low accuracy mode',
+                                'Check your internet connection',
+                                'Use location search instead'
+                            ];
                             break;
                         default:
                             errorMessage = error.message;
+                            suggestions = ['Try low accuracy mode or location search'];
                     }
-                    statusEl.textContent = 'Error: ' + errorMessage;
+                    
+                    statusEl.innerHTML = `
+                        <div class="error">
+                            <p><strong>Error:</strong> ${errorMessage}</p>
+                            <p><strong>Suggestions:</strong></p>
+                            <ul>
+                                ${suggestions.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                            <p><strong>Alternative:</strong> Use the "Search Location" tab to enter an address manually.</p>
+                        </div>
+                    `;
                     searchBtn.disabled = true;
                     log(`❌ Geolocation error: ${errorMessage} (code: ${error.code})`);
+                    log(`💡 Suggestions: ${suggestions.join(', ')}`);
                 },
-                {
-                    enableHighAccuracy: highAccuracy,
-                    timeout: 15000,
-                    maximumAge: 300000
-                }
+                options
             );
         } else {
-            statusEl.textContent = 'Geolocation not supported by this browser';
-            log('❌ Geolocation not supported');
+            statusEl.innerHTML = `
+                <div class="error">
+                    <p><strong>Geolocation not supported</strong> by this browser.</p>
+                    <p><strong>Alternative:</strong> Use the "Search Location" tab to enter an address manually.</p>
+                </div>
+            `;
+            log('❌ Geolocation not supported by this browser');
         }
     }
     

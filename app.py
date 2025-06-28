@@ -148,8 +148,53 @@ def test():
     return jsonify({
         'status': 'success',
         'message': 'App is working!',
-        'api_key_set': bool(os.getenv('GOOGLE_API_KEY'))
+        'api_key_set': bool(os.getenv('GOOGLE_API_KEY')),
+        'api_key_preview': os.getenv('GOOGLE_API_KEY', '')[:10] + '...' if os.getenv('GOOGLE_API_KEY') else 'Not set'
     })
+
+@app.route('/test-api')
+def test_api():
+    """Test if Google API key is working"""
+    google_api_key = os.getenv('GOOGLE_API_KEY')
+    if not google_api_key:
+        return jsonify({
+            'status': 'error',
+            'message': 'Google API key not configured',
+            'suggestion': 'Set GOOGLE_API_KEY environment variable in Render'
+        })
+    
+    try:
+        # Test with a simple geocoding request
+        url = 'https://maps.googleapis.com/maps/api/geocode/json'
+        params = {
+            'key': google_api_key,
+            'address': 'San Francisco, CA'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        if data.get('status') == 'OK':
+            return jsonify({
+                'status': 'success',
+                'message': 'Google API key is working!',
+                'test_result': f"Found {len(data.get('results', []))} results for 'San Francisco, CA'",
+                'api_status': data.get('status')
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Google API error: {data.get("status")}',
+                'error_message': data.get('error_message', 'Unknown error'),
+                'suggestion': 'Check your API key and enabled APIs'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'API test failed: {str(e)}',
+            'suggestion': 'Check your internet connection and API key'
+        })
 
 @app.route('/restaurants', methods=['POST'])
 def get_restaurants():
