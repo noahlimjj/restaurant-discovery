@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Restaurant Finder</title>
+    <title>Food Discovery App - Find All Food Establishments</title>
+    <meta name="description" content="Discover restaurants, cafes, bars, bakeries, and all food establishments near you using Google Maps data">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>🍽️ Restaurant Discovery</h1>
+        <header>
+            <h1>🍽️ Food Discovery App</h1>
+            <p>Find restaurants, cafes, bars, bakeries, and all food establishments near you</p>
+        </header>
         
         <!-- Location Selection -->
         <div class="location-section">
@@ -38,53 +42,69 @@
         <div id="debug-info" style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px;"></div>
         
         <!-- Filters -->
-        <div class="filters-section">
-            <h3>🔍 Filters</h3>
-            <form id="searchForm">
-                <div class="filter-group">
-                    <label for="radius">Distance (meters):</label>
-                    <input type="range" id="radius" name="radius" min="500" max="10000" value="2000" step="500">
-                    <span id="radiusValue">2000m</span>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="price">Price Level:</label>
-                    <select id="price" name="price">
-                        <option value="">Any Price</option>
-                        <option value="$">$ (Inexpensive)</option>
-                        <option value="$$">$$ (Moderate)</option>
-                        <option value="$$$">$$$ (Expensive)</option>
-                        <option value="$$$$">$$$$ (Very Expensive)</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="cuisine">Cuisine Type:</label>
-                    <input type="text" id="cuisine" name="cuisine" placeholder="e.g., Japanese, Italian, Mexican">
-                </div>
-                
-                <div class="filter-group">
-                    <label for="min_rating">Minimum Rating:</label>
-                    <select id="min_rating" name="min_rating">
-                        <option value="0">Any Rating</option>
-                        <option value="3.0">3.0+ Stars</option>
-                        <option value="3.5">3.5+ Stars</option>
-                        <option value="4.0" selected>4.0+ Stars</option>
-                        <option value="4.5">4.5+ Stars</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="dietary">Dietary Preferences:</label>
-                    <input type="text" id="dietary" name="dietary" placeholder="comma separated (e.g., vegetarian, vegan)">
-                </div>
-                
-                <div class="filter-group">
-                    <label><input type="checkbox" id="open_now" name="open_now"> Open Now</label>
-                </div>
-                
-                <button type="submit" id="searchBtn" disabled class="btn btn-primary">🔍 Find Restaurants</button>
-            </form>
+        <div class="filters">
+            <h3>🔍 Search Filters</h3>
+            <div class="filter-group">
+                <label for="radius">Search Radius:</label>
+                <select id="radius">
+                    <option value="500">500m</option>
+                    <option value="1000">1km</option>
+                    <option value="2000" selected>2km</option>
+                    <option value="5000">5km</option>
+                    <option value="10000">10km</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="cuisine">Cuisine Type:</label>
+                <select id="cuisine">
+                    <option value="">All Cuisines</option>
+                    <option value="japanese">Japanese</option>
+                    <option value="chinese">Chinese</option>
+                    <option value="italian">Italian</option>
+                    <option value="mexican">Mexican</option>
+                    <option value="indian">Indian</option>
+                    <option value="thai">Thai</option>
+                    <option value="korean">Korean</option>
+                    <option value="vietnamese">Vietnamese</option>
+                    <option value="american">American</option>
+                    <option value="french">French</option>
+                    <option value="mediterranean">Mediterranean</option>
+                    <option value="seafood">Seafood</option>
+                    <option value="pizza">Pizza</option>
+                    <option value="burger">Burger</option>
+                    <option value="sushi">Sushi</option>
+                    <option value="ramen">Ramen</option>
+                    <option value="coffee">Coffee</option>
+                    <option value="dessert">Dessert</option>
+                    <option value="bakery">Bakery</option>
+                    <option value="bar">Bar</option>
+                    <option value="cafe">Café</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="min-rating">Minimum Rating:</label>
+                <select id="min-rating">
+                    <option value="0">Any Rating</option>
+                    <option value="3.5">3.5+ Stars</option>
+                    <option value="4.0">4.0+ Stars</option>
+                    <option value="4.5">4.5+ Stars</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="price-level">Price Level:</label>
+                <select id="price-level">
+                    <option value="">Any Price</option>
+                    <option value="1">$ (Budget)</option>
+                    <option value="2">$$ (Moderate)</option>
+                    <option value="3">$$$ (Expensive)</option>
+                    <option value="4">$$$$ (Very Expensive)</option>
+                </select>
+            </div>
+            
+            <button onclick="searchFood()" class="search-btn">🔍 Search Food Establishments</button>
         </div>
         
         <div id="results"></div>
@@ -102,16 +122,26 @@
                 <button onclick="clearCache()" class="btn btn-danger">Clear All Cache</button>
             </div>
         </div>
+
+        <!-- Specific Restaurant Search -->
+        <div class="specific-search">
+            <h3>🔍 Search for Specific Restaurant</h3>
+            <div class="search-specific-group">
+                <input type="text" id="specific-restaurant" placeholder="Enter restaurant name (e.g., Domo, Ichiban Sushi)">
+                <button onclick="searchSpecificRestaurant()" class="search-specific-btn">🔍 Find Restaurant</button>
+            </div>
+            <p class="search-hint">Use this to find specific restaurants that might not appear in the general search</p>
+        </div>
     </div>
     <script>
     let currentLocation = null;
     let currentLocationMode = 'my-location';
     
     function log(message) {
-        const debugEl = document.getElementById('debug-info');
+        const logDiv = document.getElementById('log');
         const timestamp = new Date().toLocaleTimeString();
-        debugEl.innerHTML += `[${timestamp}] ${message}<br>`;
-        console.log(message);
+        logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
     }
     
     // Check if we're on HTTPS
@@ -400,89 +430,74 @@
                 document.getElementById('results').innerHTML = '<h2>Results</h2>' + sortedResults.map(r => {
                     let photosHtml = '';
                     if (r.photos && r.photos.length > 0) {
-                        photosHtml = `
-                            <div class="restaurant-photos">
-                                ${r.photos.map(photo => {
-                                    // Construct the photo URL from parameters
-                                    const params = new URLSearchParams(photo.params);
-                                    const photoUrl = `${photo.url}?${params.toString()}`;
-                                    return `
-                                        <img src="${photoUrl}" alt="${r.name}" class="restaurant-photo" loading="lazy" 
-                                             onerror="this.style.display='none'; this.nextElementSibling && this.nextElementSibling.style.display='block';"
-                                             onload="this.style.display='block'; this.nextElementSibling && this.nextElementSibling.style.display='none';">
-                                        <div class="photo-placeholder" style="display: none;">
-                                            <span>📸 Photo unavailable</span>
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        `;
-                    }
-                    
-                    let menuInfoHtml = '';
-                    if (r.menu_info) {
-                        const menuInfo = r.menu_info;
-                        const menuFeatures = [];
-                        
-                        if (menuInfo.website) menuFeatures.push(`<a href="${menuInfo.website}" target="_blank" class="menu-link">🌐 Website</a>`);
-                        if (menuInfo.serves_breakfast) menuFeatures.push('🌅 Breakfast');
-                        if (menuInfo.serves_lunch) menuFeatures.push('🍽️ Lunch');
-                        if (menuInfo.serves_dinner) menuFeatures.push('🌙 Dinner');
-                        if (menuInfo.serves_beer) menuFeatures.push('🍺 Beer');
-                        if (menuInfo.serves_wine) menuFeatures.push('🍷 Wine');
-                        if (menuInfo.delivery) menuFeatures.push('🚚 Delivery');
-                        if (menuInfo.takeout) menuFeatures.push('📦 Takeout');
-                        if (menuInfo.dine_in) menuFeatures.push('🪑 Dine-in');
-                        if (menuInfo.reservable) menuFeatures.push('📞 Reservations');
-                        if (menuInfo.outdoor_seating) menuFeatures.push('🌳 Outdoor Seating');
-                        
-                        if (menuFeatures.length > 0) {
-                            menuInfoHtml = `
-                                <div class="menu-info">
-                                    <h4>🍽️ Menu & Services</h4>
-                                    <div class="menu-features">
-                                        ${menuFeatures.join(' • ')}
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
-                    
-                    let reviewsHtml = '';
-                    if (r.reviews && r.reviews.length > 0) {
-                        reviewsHtml = `
-                            <div class="reviews-section">
-                                <h4>💬 Recent Reviews</h4>
-                                ${r.reviews.map(review => `
-                                    <div class="review">
-                                        <div class="review-header">
-                                            <strong>${review.author_name}</strong>
-                                            <span class="review-rating">⭐ ${review.rating}/5</span>
-                                        </div>
-                                        <p class="review-text">${review.text}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `;
-                    }
-                    
-                    let contactInfoHtml = '';
-                    if (r.phone || r.website) {
-                        contactInfoHtml = `
-                            <div class="contact-info">
-                                ${r.phone ? `<p>📞 <a href="tel:${r.phone}">${r.phone}</a></p>` : ''}
-                                ${r.website ? `<p>🌐 <a href="${r.website}" target="_blank">Visit Website</a></p>` : ''}
-                            </div>
-                        `;
+                        photosHtml = '<div class="restaurant-photos">';
+                        r.photos.forEach(photo => {
+                            const photoUrl = `${photo.url}?key={{ google_api_key }}&photoreference=${encodeURIComponent(photo.params.photoreference)}&maxwidth=${photo.params.maxwidth}&maxheight=${photo.params.maxheight}`;
+                            photosHtml += `<img src="${photoUrl}" alt="${r.name}" onerror="this.style.display='none'">`;
+                        });
+                        photosHtml += '</div>';
                     }
                     
                     let descriptionHtml = '';
                     if (r.editorial_summary) {
-                        descriptionHtml = `
-                            <div class="description">
-                                <p><em>${r.editorial_summary}</em></p>
-                            </div>
-                        `;
+                        descriptionHtml = `<div class="description"><p>${r.editorial_summary}</p></div>`;
+                    }
+                    
+                    let contactInfoHtml = '';
+                    if (r.phone || r.website || r.google_url) {
+                        contactInfoHtml = '<div class="contact-info">';
+                        if (r.phone) {
+                            contactInfoHtml += `<p>📞 <a href="tel:${r.phone}">${r.phone}</a></p>`;
+                        }
+                        if (r.website) {
+                            contactInfoHtml += `<p>🌐 <a href="${r.website}" target="_blank">Visit Website</a></p>`;
+                        }
+                        if (r.google_url) {
+                            contactInfoHtml += `<p>🗺️ <a href="${r.google_url}" target="_blank">View on Google Maps</a></p>`;
+                        }
+                        contactInfoHtml += '</div>';
+                    }
+                    
+                    let menuInfoHtml = '';
+                    if (r.website || r.google_url) {
+                        menuInfoHtml = '<div class="menu-info">';
+                        menuInfoHtml += '<h4>📋 Menu & Information</h4>';
+                        if (r.website) {
+                            menuInfoHtml += `<p>🍽️ <a href="${r.website}" target="_blank" class="menu-link">View Menu & Website</a></p>`;
+                        }
+                        if (r.google_url) {
+                            menuInfoHtml += `<p>📖 <a href="${r.google_url}" target="_blank" class="menu-link">View on Google Maps (may have menu)</a></p>`;
+                        }
+                        menuInfoHtml += '</div>';
+                    }
+                    
+                    let openingHoursHtml = '';
+                    if (r.opening_hours && r.opening_hours.length > 0) {
+                        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+                        openingHoursHtml = '<div class="opening-hours">';
+                        openingHoursHtml += '<h4>🕒 Opening Hours</h4>';
+                        r.opening_hours.forEach(day => {
+                            const isToday = day.toLowerCase().includes(today.toLowerCase());
+                            const dayClass = isToday ? 'today' : '';
+                            openingHoursHtml += `<p class="${dayClass}">${day}</p>`;
+                        });
+                        openingHoursHtml += '</div>';
+                    }
+                    
+                    let reviewsHtml = '';
+                    if (r.reviews && r.reviews.length > 0) {
+                        reviewsHtml = '<div class="reviews">';
+                        reviewsHtml += '<h4>💬 Recent Reviews</h4>';
+                        r.reviews.forEach(review => {
+                            reviewsHtml += `
+                                <div class="review">
+                                    <div class="review-author">${review.author} <span class="review-rating">⭐ ${review.rating}/5</span></div>
+                                    <div class="review-text">"${review.text}"</div>
+                                    <small>${review.time}</small>
+                                </div>
+                            `;
+                        });
+                        reviewsHtml += '</div>';
                     }
                     
                     return `
@@ -500,21 +515,23 @@
                             
                             <div class="restaurant-details">
                                 <p class="address">📍 ${r.address}</p>
-                                <p class="status">🕒 ${r.open_now ? 'Open Now' : 'Closed'}</p>
+                                <p class="status ${r.open_now ? 'open' : 'closed'}">🕒 ${r.open_now ? '🟢 Open Now' : '🔴 Closed'}</p>
+                                <p class="establishment-type">🏪 Type: ${getEstablishmentType(r.types)}</p>
                                 <p class="tags">🏷️ ${r.types ? r.types.join(', ') : 'N/A'}</p>
                                 
                                 ${descriptionHtml}
                                 ${contactInfoHtml}
                                 ${menuInfoHtml}
+                                ${openingHoursHtml}
                                 ${reviewsHtml}
                             </div>
                         </div>
                     `;
                 }).join('');
-                log(`✅ Found ${data.results.length} restaurants`);
+                log(`✅ Found ${data.results.length} food establishments`);
             } else {
-                document.getElementById('results').innerHTML = '<p>No results found.</p>';
-                log('ℹ️ No restaurants found');
+                document.getElementById('results').innerHTML = '<p>No food establishments found.</p>';
+                log('ℹ️ No food establishments found');
             }
         } catch (error) {
             document.getElementById('results').innerHTML = '<p>Error loading results. Please try again.</p>';
@@ -562,6 +579,207 @@
     document.addEventListener('DOMContentLoaded', function() {
         getCacheStats();
     });
+
+    function getEstablishmentType(types) {
+        if (!types || types.length === 0) return 'Unknown';
+        
+        const typeMap = {
+            'restaurant': 'Restaurant',
+            'cafe': 'Café',
+            'bar': 'Bar',
+            'bakery': 'Bakery',
+            'food': 'Food Establishment',
+            'meal_takeaway': 'Takeaway',
+            'meal_delivery': 'Delivery',
+            'liquor_store': 'Liquor Store',
+            'convenience_store': 'Convenience Store',
+            'grocery_or_supermarket': 'Grocery Store',
+            'food_court': 'Food Court',
+            'night_club': 'Night Club',
+            'establishment': 'Establishment'
+        };
+        
+        // Find the most specific type
+        for (const type of types) {
+            if (typeMap[type]) {
+                return typeMap[type];
+            }
+        }
+        
+        // If no specific type found, return the first type
+        return types[0].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function searchFood() {
+        const locationInput = document.getElementById('location-input');
+        const useMyLocation = document.getElementById('use-my-location').checked;
+        
+        if (useMyLocation) {
+            if (navigator.geolocation) {
+                log('📍 Getting your current location...');
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const location = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        performSearch(location);
+                    },
+                    error => {
+                        log(`❌ Location error: ${error.message}`);
+                        alert('Unable to get your location. Please try searching for a location instead.');
+                    }
+                );
+            } else {
+                log('❌ Geolocation not supported');
+                alert('Geolocation is not supported by your browser. Please search for a location instead.');
+            }
+        } else {
+            const locationText = locationInput.value.trim();
+            if (!locationText) {
+                alert('Please enter a location to search for.');
+                return;
+            }
+            log(`🔍 Geocoding location: ${locationText}`);
+            geocodeLocation(locationText);
+        }
+    }
+    
+    function performSearch(location) {
+        const radius = parseInt(document.getElementById('radius').value);
+        const cuisine = document.getElementById('cuisine').value;
+        const minRating = parseFloat(document.getElementById('min-rating').value);
+        const priceLevel = document.getElementById('price-level').value;
+        
+        const filters = {
+            radius: radius,
+            cuisine: cuisine,
+            min_rating: minRating,
+            price_level: priceLevel
+        };
+        
+        log(`🔍 Searching for food establishments at ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
+        log(`📊 Filters: ${radius}m radius, ${cuisine || 'all cuisines'}, ${minRating}+ stars, ${priceLevel || 'any price'}`);
+        
+        fetch('/restaurants', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                location: location,
+                filters: filters
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayResults(data.results);
+                data.log.forEach(log);
+            } else {
+                log(`❌ Search failed: ${data.error}`);
+                document.getElementById('results').innerHTML = `<p>Search failed: ${data.error}</p>`;
+            }
+        })
+        .catch(error => {
+            log(`❌ Error: ${error.message}`);
+            document.getElementById('results').innerHTML = `<p>Error: ${error.message}</p>`;
+        });
+    }
+
+    function searchSpecificRestaurant() {
+        const restaurantName = document.getElementById('specific-restaurant').value.trim();
+        if (!restaurantName) {
+            alert('Please enter a restaurant name to search for.');
+            return;
+        }
+        
+        const locationInput = document.getElementById('location-input');
+        const useMyLocation = document.getElementById('use-my-location').checked;
+        
+        if (useMyLocation) {
+            if (navigator.geolocation) {
+                log(`🔍 Searching for specific restaurant: ${restaurantName}`);
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const location = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        performSpecificSearch(restaurantName, location);
+                    },
+                    error => {
+                        log(`❌ Location error: ${error.message}`);
+                        alert('Unable to get your location. Please try searching for a location instead.');
+                    }
+                );
+            } else {
+                log('❌ Geolocation not supported');
+                alert('Geolocation is not supported by your browser. Please search for a location instead.');
+            }
+        } else {
+            const locationText = locationInput.value.trim();
+            if (!locationText) {
+                alert('Please enter a location to search for.');
+                return;
+            }
+            log(`🔍 Geocoding location for specific restaurant search: ${locationText}`);
+            geocodeLocationForSpecificSearch(restaurantName, locationText);
+        }
+    }
+    
+    function performSpecificSearch(restaurantName, location) {
+        log(`🔍 Searching for "${restaurantName}" at ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
+        
+        fetch('/search-restaurant', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: restaurantName,
+                location: location
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.results && data.results.length > 0) {
+                displayResults(data.results);
+                log(`✅ Found ${data.results.length} results for "${restaurantName}"`);
+            } else {
+                document.getElementById('results').innerHTML = `<p>No results found for "${restaurantName}". Try a different spelling or check if the restaurant exists in this area.</p>`;
+                log(`ℹ️ No results found for "${restaurantName}"`);
+            }
+        })
+        .catch(error => {
+            log(`❌ Error: ${error.message}`);
+            document.getElementById('results').innerHTML = `<p>Error searching for "${restaurantName}": ${error.message}</p>`;
+        });
+    }
+    
+    function geocodeLocationForSpecificSearch(restaurantName, locationText) {
+        fetch('/geocode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: locationText })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.results && data.results.length > 0) {
+                const location = data.results[0];
+                performSpecificSearch(restaurantName, location);
+            } else {
+                log(`❌ Could not find location: ${locationText}`);
+                alert(`Could not find location: ${locationText}`);
+            }
+        })
+        .catch(error => {
+            log(`❌ Geocoding error: ${error.message}`);
+            alert(`Error finding location: ${error.message}`);
+        });
+    }
     </script>
 </body>
 </html> 

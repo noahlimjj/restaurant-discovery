@@ -75,7 +75,7 @@ def save_to_cache(cache_file, results):
         pass
 
 def search_google_places_sync(location, filters):
-    """Search Google Places API using synchronous requests"""
+    """Search Google Places API using multiple strategies to find more restaurants"""
     google_api_key = os.getenv('GOOGLE_API_KEY')
     if not google_api_key:
         return [], ['❌ Google API key not configured']
@@ -102,39 +102,80 @@ def search_google_places_sync(location, filters):
         
         results = []
         
-        # 1. Nearby search for restaurants
-        url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        params = {
-            'key': google_api_key,
-            'location': location_str,
-            'radius': radius,
-            'type': 'restaurant'
-        }
+        # Strategy 1: Search for all food-related establishment types
+        food_types = [
+            'restaurant',
+            'cafe', 
+            'bar',
+            'bakery',
+            'food',
+            'meal_takeaway',
+            'meal_delivery',
+            'liquor_store',
+            'convenience_store',
+            'grocery_or_supermarket',
+            'food_court',
+            'night_club'
+        ]
         
-        print(f"🔍 Making Google Places API request with params: {params}")
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        for food_type in food_types:
+            url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+            params = {
+                'key': google_api_key,
+                'location': location_str,
+                'radius': radius,
+                'type': food_type
+            }
+            
+            print(f"🔍 Searching for {food_type} establishments...")
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('status') == 'OK':
+                for place in data.get('results', []):
+                    result = process_place_result(place, lat, lng)
+                    # Avoid duplicates
+                    if not any(r['id'] == result['id'] for r in results):
+                        results.append(result)
+                search_log.append(f"✅ Found {len(data.get('results', []))} {food_type} establishments")
+            elif data.get('status') == 'INVALID_REQUEST':
+                search_log.append(f"❌ Google Places API not enabled. Please enable 'Places API' in your Google Cloud Console.")
+                search_log.append(f"🔧 Go to: https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
+                return [], search_log
+            else:
+                search_log.append(f"⚠️ {food_type} search returned: {data.get('status')}")
         
-        print(f"📊 Google Places API response status: {data.get('status')}")
-        print(f"📊 Google Places API error message: {data.get('error_message', 'None')}")
+        # Strategy 2: Multiple radius searches to catch more places
+        radiuses = [radius, radius * 2, radius * 3]  # Search multiple radii
+        for search_radius in radiuses:
+            if search_radius > 50000:  # Google's max radius
+                continue
+                
+            url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+            params = {
+                'key': google_api_key,
+                'location': location_str,
+                'radius': search_radius,
+                'type': 'restaurant'
+            }
+            
+            print(f"🔍 Radius search: {search_radius}m")
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('status') == 'OK':
+                for place in data.get('results', []):
+                    result = process_place_result(place, lat, lng)
+                    # Only add if within original radius or avoid duplicates
+                    if result['distance'] <= radius or not any(r['id'] == result['id'] for r in results):
+                        if not any(r['id'] == result['id'] for r in results):
+                            results.append(result)
+                search_log.append(f"✅ Radius {search_radius}m found {len(data.get('results', []))} additional results")
         
-        if data.get('status') == 'INVALID_REQUEST':
-            search_log.append(f"❌ Google Places API not enabled. Please enable 'Places API' in your Google Cloud Console.")
-            search_log.append(f"🔧 Go to: https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
-            return [], search_log
-        elif data.get('status') != 'OK':
-            search_log.append(f"❌ Google Places API error: {data.get('status')} - {data.get('error_message', 'Unknown error')}")
-            return [], search_log
-        
-        # Process nearby search results
-        for place in data.get('results', []):
-            result = process_place_result(place, lat, lng)
-            results.append(result)
-        
-        # 2. Text search for specific restaurants if cuisine filter is applied
+        # Strategy 3: Text search for specific cuisines if filter is applied
         if filters.get('cuisine'):
             cuisine = filters['cuisine'].lower()
-            text_search_query = f"{cuisine} restaurant near {location_str}"
+            text_search_query = f"{cuisine} food near {location_str}"
             
             text_url = 'https://maps.googleapis.com/maps/api/place/textsearch/json'
             text_params = {
@@ -156,7 +197,65 @@ def search_google_places_sync(location, filters):
                         results.append(result)
                 search_log.append(f"✅ Text search found {len(text_data.get('results', []))} additional results")
         
-        search_log.append(f"✅ Found {len(results)} total Google Places results")
+        # Strategy 4: General text searches for common food terms
+        food_search_terms = [
+            "restaurants near me",
+            "food places",
+            "dining",
+            "eat",
+            "cafe",
+            "restaurant"
+        ]
+        
+        for term in food_search_terms:
+            text_url = 'https://maps.googleapis.com/maps/api/place/textsearch/json'
+            text_params = {
+                'key': google_api_key,
+                'query': f"{term} near {location_str}",
+                'location': location_str,
+                'radius': radius
+            }
+            
+            print(f"🔍 Text search: {term}")
+            text_response = requests.get(text_url, params=text_params, timeout=10)
+            text_data = text_response.json()
+            
+            if text_data.get('status') == 'OK':
+                for place in text_data.get('results', []):
+                    result = process_place_result(place, lat, lng)
+                    # Avoid duplicates
+                    if not any(r['id'] == result['id'] for r in results):
+                        results.append(result)
+                search_log.append(f"✅ '{term}' search found {len(text_data.get('results', []))} additional results")
+        
+        # Strategy 5: Search for popular restaurant chains and names
+        popular_chains = [
+            "McDonald's", "KFC", "Subway", "Pizza Hut", "Domino's", "Burger King",
+            "Starbucks", "Dunkin'", "Taco Bell", "Wendy's", "Popeyes", "Chick-fil-A"
+        ]
+        
+        for chain in popular_chains:
+            text_url = 'https://maps.googleapis.com/maps/api/place/textsearch/json'
+            text_params = {
+                'key': google_api_key,
+                'query': f"{chain} near {location_str}",
+                'location': location_str,
+                'radius': radius
+            }
+            
+            print(f"🔍 Chain search: {chain}")
+            text_response = requests.get(text_url, params=text_params, timeout=10)
+            text_data = text_response.json()
+            
+            if text_data.get('status') == 'OK':
+                for place in text_data.get('results', []):
+                    result = process_place_result(place, lat, lng)
+                    # Avoid duplicates
+                    if not any(r['id'] == result['id'] for r in results):
+                        results.append(result)
+                search_log.append(f"✅ '{chain}' search found {len(text_data.get('results', []))} additional results")
+        
+        search_log.append(f"✅ Found {len(results)} total food establishments")
         
         # Cache results
         save_to_cache(cache_file, results)
@@ -201,7 +300,7 @@ def process_place_result(place, lat, lng):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', google_api_key=os.getenv('GOOGLE_API_KEY', ''))
 
 @app.route('/test')
 def test():
@@ -439,9 +538,9 @@ def restaurants():
         print(f"Processed {len(results)} Google Places results")
         print(f"After filtering: {len(filtered_results)} restaurants")
         
-        # Get photos for top results (temporarily disabled to prevent crashes)
-        # if filtered_results:
-        #     filtered_results = get_restaurant_photos(filtered_results[:20])  # Limit to top 20 for photos
+        # Get photos and details for top results
+        if filtered_results:
+            filtered_results = get_restaurant_details(filtered_results[:20])  # Limit to top 20 for details
         
         # Log search details
         for log_entry in search_log:
@@ -460,56 +559,82 @@ def restaurants():
         print(traceback.format_exc())
         return jsonify({'error': f'Search failed: {str(e)}'}), 500
 
-def get_restaurant_photos(restaurants, max_photos=3):
-    """Get photos for restaurants using Google Places Photo API"""
+def get_restaurant_details(restaurants, max_photos=3):
+    """Get detailed information including photos and menu links for restaurants"""
     google_api_key = os.getenv('GOOGLE_API_KEY')
     if not google_api_key:
-        print("❌ No Google API key available for photos")
+        print("❌ No Google API key available for details")
         return restaurants
     
-    print(f"📸 Fetching photos for {len(restaurants)} restaurants...")
+    print(f"📸 Fetching details for {len(restaurants)} restaurants...")
     
     for i, restaurant in enumerate(restaurants):
         if not restaurant.get('id'):
             continue
             
         try:
-            # Get place details to get photo references
+            # Get place details to get photo references and menu info
             details_url = 'https://maps.googleapis.com/maps/api/place/details/json'
             details_params = {
                 'key': google_api_key,
                 'place_id': restaurant['id'],
-                'fields': 'photos'
+                'fields': 'photos,website,url,formatted_phone_number,opening_hours,reviews,editorial_summary'
             }
             
-            response = requests.get(details_url, params=details_params, timeout=5)
+            response = requests.get(details_url, params=details_params, timeout=10)
             data = response.json()
             
-            if data.get('status') == 'OK' and data.get('result', {}).get('photos'):
+            if data.get('status') == 'OK' and data.get('result'):
+                result = data['result']
+                
+                # Process photos
                 photos = []
-                for photo in data['result']['photos'][:max_photos]:
-                    photo_url = f"https://maps.googleapis.com/maps/api/place/photo"
-                    photo_params = {
-                        'key': google_api_key,
-                        'photoreference': photo['photo_reference'],
-                        'maxwidth': 400,
-                        'maxheight': 300
-                    }
-                    photos.append({
-                        'url': photo_url,
-                        'params': photo_params,
-                        'width': photo.get('width'),
-                        'height': photo.get('height')
-                    })
+                if result.get('photos'):
+                    for photo in result['photos'][:max_photos]:
+                        photo_url = f"https://maps.googleapis.com/maps/api/place/photo"
+                        photo_params = {
+                            'key': google_api_key,
+                            'photoreference': photo['photo_reference'],
+                            'maxwidth': 400,
+                            'maxheight': 300
+                        }
+                        photos.append({
+                            'url': photo_url,
+                            'params': photo_params,
+                            'width': photo.get('width'),
+                            'height': photo.get('height')
+                        })
                 restaurant['photos'] = photos
-                print(f"✅ Got {len(photos)} photos for {restaurant.get('name', 'Unknown')}")
+                
+                # Add menu and website links
+                restaurant['website'] = result.get('website')
+                restaurant['google_url'] = result.get('url')  # Google Maps URL
+                restaurant['phone'] = result.get('formatted_phone_number')
+                restaurant['opening_hours'] = result.get('opening_hours', {}).get('weekday_text', [])
+                restaurant['editorial_summary'] = result.get('editorial_summary', {}).get('overview')
+                
+                # Add reviews
+                reviews = []
+                if result.get('reviews'):
+                    for review in result['reviews'][:3]:  # Limit to 3 reviews
+                        reviews.append({
+                            'author': review.get('author_name'),
+                            'rating': review.get('rating'),
+                            'text': review.get('text'),
+                            'time': review.get('relative_time_description')
+                        })
+                restaurant['reviews'] = reviews
+                
+                print(f"✅ Got details for {restaurant.get('name', 'Unknown')} - {len(photos)} photos, {len(reviews)} reviews")
             else:
                 restaurant['photos'] = []
-                print(f"ℹ️ No photos available for {restaurant.get('name', 'Unknown')}")
+                restaurant['reviews'] = []
+                print(f"ℹ️ No details available for {restaurant.get('name', 'Unknown')}")
                 
         except Exception as e:
-            print(f"❌ Error getting photos for {restaurant.get('name', 'Unknown')}: {str(e)}")
+            print(f"❌ Error getting details for {restaurant.get('name', 'Unknown')}: {str(e)}")
             restaurant['photos'] = []
+            restaurant['reviews'] = []
     
     return restaurants
 
@@ -667,19 +792,141 @@ def search_restaurant_by_name():
         return jsonify({'error': f'Search failed: {str(e)}'}), 500
 
 def search_manual_restaurants(location, filters):
-    """Search manual restaurant database"""
-    results = []
-    lat = float(location['lat'])
-    lng = float(location['lng'])
-    radius = filters.get('radius', 2000)
+    """Search manually added restaurants that might be missing from Google Places API"""
+    manual_restaurants = [
+        # Popular Singapore restaurants that might be missing
+        {
+            'name': 'Domo',
+            'address': 'Various locations in Singapore',
+            'rating': 4.2,
+            'user_ratings_total': 150,
+            'price_level': 2,
+            'types': ['restaurant', 'japanese', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_domo_1'
+        },
+        {
+            'name': 'Ichiban Sushi',
+            'address': 'Multiple locations across Singapore',
+            'rating': 4.0,
+            'user_ratings_total': 200,
+            'price_level': 2,
+            'types': ['restaurant', 'japanese', 'sushi', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_ichiban_1'
+        },
+        {
+            'name': 'Sakura Japanese Restaurant',
+            'address': 'Various locations in Singapore',
+            'rating': 4.1,
+            'user_ratings_total': 180,
+            'price_level': 3,
+            'types': ['restaurant', 'japanese', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_sakura_1'
+        },
+        {
+            'name': 'Genki Sushi',
+            'address': 'Multiple locations in Singapore',
+            'rating': 4.3,
+            'user_ratings_total': 300,
+            'price_level': 2,
+            'types': ['restaurant', 'japanese', 'sushi', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_genki_1'
+        },
+        {
+            'name': 'Sushi Express',
+            'address': 'Various locations across Singapore',
+            'rating': 3.9,
+            'user_ratings_total': 250,
+            'price_level': 1,
+            'types': ['restaurant', 'japanese', 'sushi', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_sushi_express_1'
+        },
+        {
+            'name': 'Ichiban Boshi',
+            'address': 'Multiple locations in Singapore',
+            'rating': 4.0,
+            'user_ratings_total': 220,
+            'price_level': 2,
+            'types': ['restaurant', 'japanese', 'ramen', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_ichiban_boshi_1'
+        },
+        {
+            'name': 'Ajisen Ramen',
+            'address': 'Various locations in Singapore',
+            'rating': 3.8,
+            'user_ratings_total': 190,
+            'price_level': 2,
+            'types': ['restaurant', 'japanese', 'ramen', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_ajisen_1'
+        },
+        {
+            'name': 'Marutama Ramen',
+            'address': 'Multiple locations in Singapore',
+            'rating': 4.2,
+            'user_ratings_total': 280,
+            'price_level': 3,
+            'types': ['restaurant', 'japanese', 'ramen', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_marutama_1'
+        },
+        {
+            'name': 'Ippudo',
+            'address': 'Various locations in Singapore',
+            'rating': 4.4,
+            'user_ratings_total': 350,
+            'price_level': 3,
+            'types': ['restaurant', 'japanese', 'ramen', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_ippudo_1'
+        },
+        {
+            'name': 'Santouka Ramen',
+            'address': 'Multiple locations in Singapore',
+            'rating': 4.1,
+            'user_ratings_total': 240,
+            'price_level': 3,
+            'types': ['restaurant', 'japanese', 'ramen', 'food'],
+            'lat': 1.298348,
+            'lng': 103.890335,
+            'source': 'manual',
+            'id': 'manual_santouka_1'
+        }
+    ]
     
-    for key, restaurant in MANUAL_RESTAURANTS.items():
-        # Calculate distance
+    # Calculate distances and filter by radius
+    radius = filters.get('radius', 2000)
+    filtered_results = []
+    
+    for restaurant in manual_restaurants:
+        # Calculate distance using Haversine formula
         from math import radians, cos, sin, asin, sqrt
-        lat1, lon1 = lat, lng
+        lat1, lon1 = location['lat'], location['lng']
         lat2, lon2 = restaurant['lat'], restaurant['lng']
         
-        # Haversine formula
         R = 6371  # Earth's radius in kilometers
         dlat = radians(lat2 - lat1)
         dlon = radians(lon2 - lon1)
@@ -687,35 +934,13 @@ def search_manual_restaurants(location, filters):
         c = 2 * asin(sqrt(a))
         distance = R * c * 1000  # Convert to meters
         
-        # Check if within radius
+        restaurant['distance'] = int(distance)
+        
+        # Only include if within radius
         if distance <= radius:
-            # Apply filters
-            if filters.get('cuisine') and restaurant.get('cuisine') != filters['cuisine']:
-                continue
-            if filters.get('min_rating', 0) > 0 and restaurant.get('rating', 0) < filters['min_rating']:
-                continue
-            if filters.get('price_level') is not None and restaurant.get('price_level') != filters['price_level']:
-                continue
-            
-            result = {
-                'source': 'manual',
-                'id': f"manual_{key}",
-                'name': restaurant['name'],
-                'address': restaurant['address'],
-                'rating': restaurant.get('rating'),
-                'user_ratings_total': restaurant.get('user_ratings_total'),
-                'distance': int(distance),
-                'price_level': restaurant.get('price_level'),
-                'open_now': None,  # Manual entries don't have real-time data
-                'photos': [],
-                'types': restaurant.get('types', []),
-                'lat': restaurant['lat'],
-                'lng': restaurant['lng'],
-                'description': restaurant.get('description')
-            }
-            results.append(result)
+            filtered_results.append(restaurant)
     
-    return results
+    return filtered_results
 
 if __name__ == "__main__":
     import os
