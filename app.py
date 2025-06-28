@@ -496,13 +496,30 @@ def restaurants():
         # Apply filters
         filtered_results = results.copy()
         
+        # Debug: Show initial results
+        print(f"🔍 Initial results count: {len(filtered_results)}")
+        
+        # Filter by distance/radius first
+        if filters.get('radius'):
+            radius = filters['radius']
+            before_distance = len(filtered_results)
+            filtered_results = [r for r in filtered_results if r.get('distance', float('inf')) <= radius]
+            after_distance = len(filtered_results)
+            print(f"🔍 Distance filter: {before_distance} -> {after_distance} (radius: {radius}m)")
+        
         # Filter by minimum rating
         if filters.get('min_rating', 0) > 0:
+            before_rating = len(filtered_results)
             filtered_results = [r for r in filtered_results if r.get('rating', 0) >= filters['min_rating']]
+            after_rating = len(filtered_results)
+            print(f"🔍 Rating filter: {before_rating} -> {after_rating} (min_rating: {filters['min_rating']})")
         
         # Filter by open now
         if filters.get('open_now'):
+            before_open = len(filtered_results)
             filtered_results = [r for r in filtered_results if r.get('open_now') is True]
+            after_open = len(filtered_results)
+            print(f"🔍 Open now filter: {before_open} -> {after_open}")
         
         # Filter by cuisine type
         if filters.get('cuisine') and filters.get('cuisine').strip():
@@ -519,15 +536,19 @@ def restaurants():
                     'american': ['american', 'burger', 'steak', 'bbq', 'diner'],
                     'french': ['french', 'bistro', 'brasserie', 'crepe', 'croissant'],
                     'mediterranean': ['mediterranean', 'greek', 'lebanese', 'turkish', 'falafel'],
-                    'seafood': ['seafood', 'fish', 'crab', 'lobster', 'oyster', 'shrimp', 'prawn']
+                    'seafood': ['seafood', 'fish', 'crab', 'lobster', 'oyster', 'shrimp', 'prawn'],
+                    'dessert': ['dessert', 'cake', 'ice cream', 'pastry', 'bakery', 'sweet'],
+                    'vietnamese': ['vietnamese', 'pho', 'banh mi', 'spring roll', 'viet']
                 }
                 
                 keywords = cuisine_keywords.get(cuisine, [cuisine])
+                before_cuisine = len(filtered_results)
                 filtered_results = [r for r in filtered_results 
                                   if any(keyword in r.get('name', '').lower() or 
                                         any(keyword in t.lower() for t in r.get('types', []))
                                         for keyword in keywords)]
-                print(f"🔍 Filtered by cuisine '{cuisine}' using keywords: {keywords}")
+                after_cuisine = len(filtered_results)
+                print(f"🔍 Cuisine filter: {before_cuisine} -> {after_cuisine} (cuisine: '{cuisine}', keywords: {keywords})")
             except Exception as e:
                 print(f"❌ Error in cuisine filtering: {str(e)}")
                 # Don't filter by cuisine if there's an error
@@ -535,8 +556,11 @@ def restaurants():
         
         # Filter by price level
         if filters.get('price_level') is not None and filters.get('price_level') != '':
+            before_price = len(filtered_results)
             filtered_results = [r for r in filtered_results 
                               if r.get('price_level') == filters['price_level']]
+            after_price = len(filtered_results)
+            print(f"🔍 Price filter: {before_price} -> {after_price} (price_level: {filters['price_level']})")
         
         print(f"Processed {len(results)} Google Places results")
         print(f"After filtering: {len(filtered_results)} restaurants")
@@ -547,7 +571,7 @@ def restaurants():
             print(f"🔍 DEBUG: Applied filters: {filters}")
             # Show first few results for debugging
             for i, result in enumerate(results[:5]):
-                print(f"🔍 DEBUG: Result {i+1}: {result.get('name', 'Unknown')} - Rating: {result.get('rating', 'N/A')}, Distance: {result.get('distance', 'N/A')}m")
+                print(f"🔍 DEBUG: Result {i+1}: {result.get('name', 'Unknown')} - Rating: {result.get('rating', 'N/A')}, Distance: {result.get('distance', 'N/A')}m, Price: {result.get('price_level', 'N/A')}, Types: {result.get('types', [])}")
         
         # Get photos and details for top results
         if filtered_results:
