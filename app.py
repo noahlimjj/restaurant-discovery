@@ -7,18 +7,12 @@ import json
 from datetime import datetime, timedelta
 import asyncio
 from dotenv import load_dotenv
-import subprocess
 import aiohttp
 from api.google_places import search_google_places, cleanup_expired_cache, get_cache_stats
 
 load_dotenv()
 
 app = Flask(__name__)
-
-# SSL context for HTTPS
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
 
 @app.route('/')
 def index():
@@ -288,61 +282,12 @@ def cleanup_cache():
     
     return jsonify({'message': f'Cleaned up {expired_count} expired cache files'})
 
-def create_self_signed_cert():
-    """Create a self-signed certificate using OpenSSL"""
-    try:
-        # Generate private key
-        subprocess.run([
-            'openssl', 'genrsa', '-out', 'key.pem', '2048'
-        ], check=True, capture_output=True)
-        
-        # Generate certificate
-        subprocess.run([
-            'openssl', 'req', '-new', '-x509', '-key', 'key.pem', 
-            '-out', 'cert.pem', '-days', '365',
-            '-subj', '/C=US/ST=CA/L=San Francisco/O=Food Recommendation App/CN=localhost'
-        ], check=True, capture_output=True)
-        
-        return "cert.pem", "key.pem"
-    except subprocess.CalledProcessError as e:
-        print(f"Error creating SSL certificate: {e}")
-        return None, None
-    except FileNotFoundError:
-        print("OpenSSL not found. Please install OpenSSL or use HTTP instead.")
-        return None, None
-
 if __name__ == "__main__":
     import os
     
     # Get port from environment variable (for production) or use default
     port = int(os.environ.get("PORT", 5001))
     
-    # Check if we're in production (Render, Railway, etc.)
-    is_production = os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PORT")
-    
-    if is_production:
-        # Production: no SSL context, bind to all interfaces
-        print(f"Starting Flask app in production mode on port {port}...")
-        app.run(host="0.0.0.0", port=port, debug=False)
-    else:
-        # Development: use SSL context
-        print("Starting Flask app with HTTPS...")
-        print(f"Access the app at: https://127.0.0.1:{port}")
-        print(f"Test API with: https://127.0.0.1:{port}/restaurants/sf")
-        print("Note: You may see a security warning in your browser. Click 'Advanced' and 'Proceed to localhost' to continue.")
-        
-        # Create SSL context for development
-        cert_file = "cert.pem"
-        key_file = "key.pem"
-        
-        if not os.path.exists(cert_file) or not os.path.exists(key_file):
-            print("Creating self-signed SSL certificate...")
-            cert_file, key_file = create_self_signed_cert()
-            if cert_file and key_file:
-                print("SSL certificate created successfully!")
-            else:
-                print("Failed to create SSL certificate. Starting with HTTP...")
-                app.run(debug=True, host="0.0.0.0", port=port)
-                exit()
-        
-        app.run(debug=True, host="0.0.0.0", port=port, ssl_context=(cert_file, key_file)) 
+    # Always use production mode on Render
+    print(f"Starting Flask app on port {port}...")
+    app.run(host="0.0.0.0", port=port, debug=False) 
