@@ -83,7 +83,9 @@ def search_google_places_sync(location, filters):
         lng = float(location['lng'])
         location_str = f"{lat},{lng}"
         
-        # Nearby search
+        results = []
+        
+        # 1. Nearby search for restaurants
         url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
         params = {
             'key': google_api_key,
@@ -107,39 +109,37 @@ def search_google_places_sync(location, filters):
             search_log.append(f"❌ Google Places API error: {data.get('status')} - {data.get('error_message', 'Unknown error')}")
             return [], search_log
         
-        results = []
+        # Process nearby search results
         for place in data.get('results', []):
-            # Calculate distance
-            from math import radians, cos, sin, asin, sqrt
-            lat1, lon1 = lat, lng
-            lat2, lon2 = place['geometry']['location']['lat'], place['geometry']['location']['lng']
-            
-            # Haversine formula
-            R = 6371  # Earth's radius in kilometers
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * asin(sqrt(a))
-            distance = R * c * 1000  # Convert to meters
-            
-            result = {
-                'source': 'google',
-                'id': place.get('place_id'),
-                'name': place.get('name'),
-                'address': place.get('vicinity'),
-                'rating': place.get('rating'),
-                'user_ratings_total': place.get('user_ratings_total'),
-                'distance': int(distance),
-                'price_level': place.get('price_level'),
-                'open_now': place.get('opening_hours', {}).get('open_now'),
-                'photos': [],
-                'types': place.get('types', []),
-                'lat': place['geometry']['location']['lat'],
-                'lng': place['geometry']['location']['lng']
-            }
+            result = process_place_result(place, lat, lng)
             results.append(result)
         
-        search_log.append(f"✅ Found {len(results)} Google Places results")
+        # 2. Text search for specific restaurants if cuisine filter is applied
+        if filters.get('cuisine'):
+            cuisine = filters['cuisine'].lower()
+            text_search_query = f"{cuisine} restaurant near {location_str}"
+            
+            text_url = 'https://maps.googleapis.com/maps/api/place/textsearch/json'
+            text_params = {
+                'key': google_api_key,
+                'query': text_search_query,
+                'location': location_str,
+                'radius': radius
+            }
+            
+            print(f"🔍 Making text search request: {text_search_query}")
+            text_response = requests.get(text_url, params=text_params, timeout=10)
+            text_data = text_response.json()
+            
+            if text_data.get('status') == 'OK':
+                for place in text_data.get('results', []):
+                    result = process_place_result(place, lat, lng)
+                    # Avoid duplicates
+                    if not any(r['id'] == result['id'] for r in results):
+                        results.append(result)
+                search_log.append(f"✅ Text search found {len(text_data.get('results', []))} additional results")
+        
+        search_log.append(f"✅ Found {len(results)} total Google Places results")
         
         # Cache results
         save_to_cache(cache_file, results)
@@ -150,6 +150,37 @@ def search_google_places_sync(location, filters):
     except Exception as e:
         search_log.append(f"❌ Error searching Google Places: {str(e)}")
         return [], search_log
+
+def process_place_result(place, lat, lng):
+    """Process a single place result from Google Places API"""
+    # Calculate distance
+    from math import radians, cos, sin, asin, sqrt
+    lat1, lon1 = lat, lng
+    lat2, lon2 = place['geometry']['location']['lat'], place['geometry']['location']['lng']
+    
+    # Haversine formula
+    R = 6371  # Earth's radius in kilometers
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    distance = R * c * 1000  # Convert to meters
+    
+    return {
+        'source': 'google',
+        'id': place.get('place_id'),
+        'name': place.get('name'),
+        'address': place.get('vicinity') or place.get('formatted_address'),
+        'rating': place.get('rating'),
+        'user_ratings_total': place.get('user_ratings_total'),
+        'distance': int(distance),
+        'price_level': place.get('price_level'),
+        'open_now': place.get('opening_hours', {}).get('open_now'),
+        'photos': [],
+        'types': place.get('types', []),
+        'lat': place['geometry']['location']['lat'],
+        'lng': place['geometry']['location']['lng']
+    }
 
 @app.route('/')
 def index():
@@ -559,6 +590,58 @@ def clear_cache():
                 pass
     
     return jsonify({'message': f'Cleared {cleared_count} cache files'})
+
+@app.route('/search-restaurant', methods=['POST'])
+def search_restaurant_by_name():
+    """Search for a specific restaurant by name"""
+    try:
+        data = request.get_json()
+        restaurant_name = data.get('name', '').strip()
+        location = data.get('location')
+        
+        if not restaurant_name:
+            return jsonify({'error': 'Restaurant name is required'}), 400
+        
+        if not location:
+            return jsonify({'error': 'Location is required'}), 400
+        
+        google_api_key = os.getenv('GOOGLE_API_KEY')
+        if not google_api_key:
+            return jsonify({'error': 'Google API key not configured'}), 400
+        
+        # Text search for the specific restaurant
+        text_url = 'https://maps.googleapis.com/maps/api/place/textsearch/json'
+        text_params = {
+            'key': google_api_key,
+            'query': f"{restaurant_name} restaurant",
+            'location': f"{location['lat']},{location['lng']}",
+            'radius': 5000  # 5km radius
+        }
+        
+        print(f"🔍 Searching for restaurant: {restaurant_name}")
+        response = requests.get(text_url, params=text_params, timeout=10)
+        data = response.json()
+        
+        if data.get('status') != 'OK':
+            return jsonify({
+                'error': f'Search failed: {data.get("status")}',
+                'error_message': data.get('error_message', 'Unknown error')
+            }), 400
+        
+        results = []
+        for place in data.get('results', []):
+            result = process_place_result(place, location['lat'], location['lng'])
+            results.append(result)
+        
+        return jsonify({
+            'results': results,
+            'total_found': len(results),
+            'search_query': restaurant_name
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in restaurant name search: {str(e)}")
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
 
 if __name__ == "__main__":
     import os
