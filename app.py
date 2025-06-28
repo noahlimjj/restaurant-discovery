@@ -498,7 +498,7 @@ def restaurants():
             filtered_results = [r for r in filtered_results if r.get('open_now') is True]
         
         # Filter by cuisine type
-        if filters.get('cuisine'):
+        if filters.get('cuisine') and filters.get('cuisine').strip():
             cuisine = filters['cuisine'].lower()
             cuisine_keywords = {
                 'japanese': ['japanese', 'sushi', 'ramen', 'tempura', 'bento', 'izakaya', 'teppanyaki'],
@@ -520,7 +520,7 @@ def restaurants():
                                     for keyword in keywords)]
         
         # Filter by price level
-        if filters.get('price_level') is not None:
+        if filters.get('price_level') is not None and filters.get('price_level') != '':
             filtered_results = [r for r in filtered_results 
                               if r.get('price_level') == filters['price_level']]
         
