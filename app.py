@@ -156,10 +156,9 @@ def search_google_places_sync(location, filters):
             if data.get('status') == 'OK':
                 for place in data.get('results', []):
                     result = process_place_result(place, lat, lng)
-                    # Only add if within original radius or avoid duplicates
-                    if result['distance'] <= radius or not any(r['id'] == result['id'] for r in results):
-                        if not any(r['id'] == result['id'] for r in results):
-                            results.append(result)
+                    # Avoid duplicates only
+                    if not any(r['id'] == result['id'] for r in results):
+                        results.append(result)
                 search_log.append(f"✅ Radius {search_radius}m found {len(data.get('results', []))} additional results")
         
         # Strategy 3: Text search for specific cuisines if filter is applied
@@ -527,6 +526,14 @@ def restaurants():
         
         print(f"Processed {len(results)} Google Places results")
         print(f"After filtering: {len(filtered_results)} restaurants")
+        
+        # Debug: Show what filters are being applied
+        if len(results) > 0 and len(filtered_results) == 0:
+            print(f"🔍 DEBUG: All {len(results)} results were filtered out!")
+            print(f"🔍 DEBUG: Applied filters: {filters}")
+            # Show first few results for debugging
+            for i, result in enumerate(results[:5]):
+                print(f"🔍 DEBUG: Result {i+1}: {result.get('name', 'Unknown')} - Rating: {result.get('rating', 'N/A')}, Distance: {result.get('distance', 'N/A')}m")
         
         # Get photos and details for top results
         if filtered_results:
