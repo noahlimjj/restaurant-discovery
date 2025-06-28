@@ -935,7 +935,7 @@ def search_manual_restaurants(location, filters):
 @app.route('/version')
 def version():
     return jsonify({
-        'version': '2.1',
+        'version': '2.2',
         'features': [
             'Simplified restaurant and cafe search',
             'Photos from Google Places API',
