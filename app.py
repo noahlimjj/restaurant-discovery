@@ -13,6 +13,23 @@ app = Flask(__name__)
 CACHE_DIR = 'cache'
 CACHE_DURATION_HOURS = 24
 
+# Manual restaurant database for restaurants not in Google Places
+MANUAL_RESTAURANTS = {
+    'domo': {
+        'name': 'Domo Modern Japanese Restaurant',
+        'address': '252 N Bridge Rd, #03-00 Fairmont Singapore, Singapore 179103',
+        'lat': 1.2942831,
+        'lng': 103.8529487,
+        'rating': 4.5,
+        'user_ratings_total': 150,
+        'price_level': 3,
+        'types': ['restaurant', 'japanese', 'fine_dining'],
+        'cuisine': 'japanese',
+        'description': 'Modern Japanese restaurant located in Fairmont Singapore',
+        'source': 'manual'
+    }
+}
+
 def ensure_cache_dir():
     """Ensure cache directory exists"""
     if not os.path.exists(CACHE_DIR):
@@ -375,6 +392,12 @@ def restaurants():
         # Search using Google Places API
         results, search_log = search_google_places_sync(location, filters)
         
+        # Add manual restaurants
+        manual_results = search_manual_restaurants(location, filters)
+        if manual_results:
+            results.extend(manual_results)
+            search_log.append(f"✅ Added {len(manual_results)} manual restaurants")
+        
         # Apply filters
         filtered_results = results.copy()
         
@@ -642,6 +665,57 @@ def search_restaurant_by_name():
     except Exception as e:
         print(f"❌ Error in restaurant name search: {str(e)}")
         return jsonify({'error': f'Search failed: {str(e)}'}), 500
+
+def search_manual_restaurants(location, filters):
+    """Search manual restaurant database"""
+    results = []
+    lat = float(location['lat'])
+    lng = float(location['lng'])
+    radius = filters.get('radius', 2000)
+    
+    for key, restaurant in MANUAL_RESTAURANTS.items():
+        # Calculate distance
+        from math import radians, cos, sin, asin, sqrt
+        lat1, lon1 = lat, lng
+        lat2, lon2 = restaurant['lat'], restaurant['lng']
+        
+        # Haversine formula
+        R = 6371  # Earth's radius in kilometers
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        distance = R * c * 1000  # Convert to meters
+        
+        # Check if within radius
+        if distance <= radius:
+            # Apply filters
+            if filters.get('cuisine') and restaurant.get('cuisine') != filters['cuisine']:
+                continue
+            if filters.get('min_rating', 0) > 0 and restaurant.get('rating', 0) < filters['min_rating']:
+                continue
+            if filters.get('price_level') is not None and restaurant.get('price_level') != filters['price_level']:
+                continue
+            
+            result = {
+                'source': 'manual',
+                'id': f"manual_{key}",
+                'name': restaurant['name'],
+                'address': restaurant['address'],
+                'rating': restaurant.get('rating'),
+                'user_ratings_total': restaurant.get('user_ratings_total'),
+                'distance': int(distance),
+                'price_level': restaurant.get('price_level'),
+                'open_now': None,  # Manual entries don't have real-time data
+                'photos': [],
+                'types': restaurant.get('types', []),
+                'lat': restaurant['lat'],
+                'lng': restaurant['lng'],
+                'description': restaurant.get('description')
+            }
+            results.append(result)
+    
+    return results
 
 if __name__ == "__main__":
     import os
