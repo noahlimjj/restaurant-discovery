@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Restaurant Finder</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ Restaurant Discovery</h1>
+        
+        <!-- Location Selection -->
+        <div class="location-section">
+            <h3>📍 Location</h3>
+            <div class="location-toggle">
+                <button id="useMyLocationBtn" class="btn btn-primary active" onclick="setLocationMode('my-location')">Use My Location</button>
+                <button id="searchLocationBtn" class="btn btn-secondary" onclick="setLocationMode('search-location')">Search Location</button>
+            </div>
+            
+            <!-- My Location Mode -->
+            <div id="myLocationMode" class="location-mode active">
+                <p>Click the button below to use your current location:</p>
+                <button onclick="getCurrentLocation()" class="btn btn-success">📍 Get My Location</button>
+                <button onclick="getCurrentLocationLowAccuracy()" class="btn btn-warning">📍 Get My Location (Low Accuracy)</button>
+                <div id="locationStatus" class="location-status"></div>
+            </div>
+            
+            <!-- Search Location Mode -->
+            <div id="searchLocationMode" class="location-mode">
+                <div class="search-location-form">
+                    <input type="text" id="locationSearch" placeholder="Enter city, address, or landmark (e.g., 'San Francisco, CA', 'Times Square, NY')" class="form-control">
+                    <button onclick="searchLocation()" class="btn btn-success">🔍 Search Location</button>
+                </div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        </div>
+
+        <div id="debug-info" style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px;"></div>
+        
+        <!-- Filters -->
+        <div class="filters-section">
+            <h3>🔍 Filters</h3>
+            <form id="searchForm">
+                <div class="filter-group">
+                    <label for="radius">Distance (meters):</label>
+                    <input type="range" id="radius" name="radius" min="500" max="10000" value="2000" step="500">
+                    <span id="radiusValue">2000m</span>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="price">Price Level:</label>
+                    <select id="price" name="price">
+                        <option value="">Any Price</option>
+                        <option value="$">$ (Inexpensive)</option>
+                        <option value="$$">$$ (Moderate)</option>
+                        <option value="$$$">$$$ (Expensive)</option>
+                        <option value="$$$$">$$$$ (Very Expensive)</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="cuisine">Cuisine Type:</label>
+                    <input type="text" id="cuisine" name="cuisine" placeholder="e.g., Japanese, Italian, Mexican">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="min_rating">Minimum Rating:</label>
+                    <select id="min_rating" name="min_rating">
+                        <option value="0">Any Rating</option>
+                        <option value="3.0">3.0+ Stars</option>
+                        <option value="3.5">3.5+ Stars</option>
+                        <option value="4.0" selected>4.0+ Stars</option>
+                        <option value="4.5">4.5+ Stars</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="dietary">Dietary Preferences:</label>
+                    <input type="text" id="dietary" name="dietary" placeholder="comma separated (e.g., vegetarian, vegan)">
+                </div>
+                
+                <div class="filter-group">
+                    <label><input type="checkbox" id="open_now" name="open_now"> Open Now</label>
+                </div>
+                
+                <button type="submit" id="searchBtn" disabled class="btn btn-primary">🔍 Find Restaurants</button>
+            </form>
+        </div>
+        
+        <div id="results"></div>
+        
+        <!-- Cache Management Section -->
+        <div class="cache-section">
+            <h3>Cache Management</h3>
+            <div class="cache-stats">
+                <p>Cache files: <span id="cache-files">-</span></p>
+                <p>Cache size: <span id="cache-size">-</span></p>
+            </div>
+            <div class="cache-actions">
+                <button onclick="getCacheStats()" class="btn btn-secondary">Refresh Stats</button>
+                <button onclick="cleanupCache()" class="btn btn-warning">Cleanup Expired</button>
+                <button onclick="clearCache()" class="btn btn-danger">Clear All Cache</button>
+            </div>
+        </div>
+    </div>
+    <script>
+    let currentLocation = null;
+    let currentLocationMode = 'my-location';
+    
+    function log(message) {
+        const debugEl = document.getElementById('debug-info');
+        const timestamp = new Date().toLocaleTimeString();
+        debugEl.innerHTML += `[${timestamp}] ${message}<br>`;
+        console.log(message);
+    }
+    
+    // Check if we're on HTTPS
+    if (location.protocol === 'https:') {
+        log('✅ HTTPS detected - geolocation should work');
+    } else {
+        log('❌ HTTP detected - geolocation may not work');
+    }
+    
+    // Check if geolocation is available
+    if (navigator.geolocation) {
+        log('✅ Geolocation API is available');
+    } else {
+        log('❌ Geolocation API is not available');
+    }
+    
+    // Location mode switching
+    function setLocationMode(mode) {
+        currentLocationMode = mode;
+        
+        // Update button states
+        document.getElementById('useMyLocationBtn').className = mode === 'my-location' ? 'btn btn-primary active' : 'btn btn-secondary';
+        document.getElementById('searchLocationBtn').className = mode === 'search-location' ? 'btn btn-primary active' : 'btn btn-secondary';
+        
+        // Show/hide mode sections
+        document.getElementById('myLocationMode').className = mode === 'my-location' ? 'location-mode active' : 'location-mode';
+        document.getElementById('searchLocationMode').className = mode === 'search-location' ? 'location-mode active' : 'location-mode';
+        
+        // Clear current location when switching modes
+        currentLocation = null;
+        document.getElementById('searchBtn').disabled = true;
+        document.getElementById('locationStatus').textContent = '';
+        document.getElementById('searchResults').innerHTML = '';
+        
+        log(`📍 Switched to ${mode} mode`);
+    }
+    
+    // My Location Functions
+    function getCurrentLocation() {
+        getLocation(true);
+    }
+    
+    function getCurrentLocationLowAccuracy() {
+        getLocation(false);
+    }
+    
+    function getLocation(highAccuracy = true) {
+        const statusEl = document.getElementById('locationStatus');
+        const searchBtn = document.getElementById('searchBtn');
+        
+        statusEl.textContent = 'Detecting location...';
+        log(`🔍 Starting geolocation request (${highAccuracy ? 'high' : 'low'} accuracy)...`);
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    currentLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    statusEl.textContent = `Location: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`;
+                    searchBtn.disabled = false;
+                    log(`✅ Location obtained: ${currentLocation.lat}, ${currentLocation.lng}`);
+                    log(`📊 Accuracy: ${position.coords.accuracy}m`);
+                },
+                function(error) {
+                    let errorMessage = 'Unknown error';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Permission denied. Please allow location access in your browser settings.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable. Try: 1) Check your internet connection 2) Enable location services on your device 3) Try low accuracy mode';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out. Try again or use low accuracy mode.';
+                            break;
+                        default:
+                            errorMessage = error.message;
+                    }
+                    statusEl.textContent = 'Error: ' + errorMessage;
+                    searchBtn.disabled = true;
+                    log(`❌ Geolocation error: ${errorMessage} (code: ${error.code})`);
+                },
+                {
+                    enableHighAccuracy: highAccuracy,
+                    timeout: 15000,
+                    maximumAge: 300000
+                }
+            );
+        } else {
+            statusEl.textContent = 'Geolocation not supported by this browser';
+            log('❌ Geolocation not supported');
+        }
+    }
+    
+    // Location Search Functions
+    async function searchLocation() {
+        const searchInput = document.getElementById('locationSearch').value.trim();
+        const searchResults = document.getElementById('searchResults');
+        const searchBtn = document.getElementById('searchBtn');
+        
+        if (!searchInput) {
+            alert('Please enter a location to search for');
+            return;
+        }
+        
+        searchResults.innerHTML = 'Searching for location...';
+        log(`🔍 Searching for location: ${searchInput}`);
+        
+        try {
+            const response = await fetch('/geocode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: searchInput })
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                if (data.error.includes('API access denied') || data.error.includes('not configured')) {
+                    searchResults.innerHTML = `
+                        <div class="error">
+                            <p>❌ ${data.error}</p>
+                            <p><strong>Alternative:</strong> You can manually enter coordinates or use "Use My Location" instead.</p>
+                            <div class="manual-coordinates">
+                                <h4>Enter Coordinates Manually:</h4>
+                                <input type="number" id="manualLat" placeholder="Latitude (e.g., 37.7749)" step="any" class="form-control">
+                                <input type="number" id="manualLng" placeholder="Longitude (e.g., -122.4194)" step="any" class="form-control">
+                                <button onclick="useManualCoordinates()" class="btn btn-primary">Use These Coordinates</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    searchResults.innerHTML = `<p class="error">❌ ${data.error}</p>`;
+                }
+                log(`❌ Geocoding error: ${data.error}`);
+                return;
+            }
+            
+            if (data.results && data.results.length > 0) {
+                searchResults.innerHTML = '<h4>Select a location:</h4>' + data.results.map((result, index) => `
+                    <div class="location-result" onclick="selectLocation(${result.lat}, ${result.lng}, '${result.formatted_address}')">
+                        <strong>${result.formatted_address}</strong>
+                        <br><small>${result.lat.toFixed(4)}, ${result.lng.toFixed(4)}</small>
+                    </div>
+                `).join('');
+                log(`✅ Found ${data.results.length} location results`);
+            } else {
+                searchResults.innerHTML = '<p class="error">No locations found. Try a different search term.</p>';
+                log('ℹ️ No location results found');
+            }
+        } catch (error) {
+            searchResults.innerHTML = `
+                <div class="error">
+                    <p>❌ Error searching for location. Please try again.</p>
+                    <p><strong>Alternative:</strong> You can manually enter coordinates or use "Use My Location" instead.</p>
+                    <div class="manual-coordinates">
+                        <h4>Enter Coordinates Manually:</h4>
+                        <input type="number" id="manualLat" placeholder="Latitude (e.g., 37.7749)" step="any" class="form-control">
+                        <input type="number" id="manualLng" placeholder="Longitude (e.g., -122.4194)" step="any" class="form-control">
+                        <button onclick="useManualCoordinates()" class="btn btn-primary">Use These Coordinates</button>
+                    </div>
+                </div>
+            `;
+            log(`❌ Search error: ${error.message}`);
+        }
+    }
+    
+    function useManualCoordinates() {
+        const lat = parseFloat(document.getElementById('manualLat').value);
+        const lng = parseFloat(document.getElementById('manualLng').value);
+        
+        if (isNaN(lat) || isNaN(lng)) {
+            alert('Please enter valid coordinates');
+            return;
+        }
+        
+        if (lat < -90 || lat > 90) {
+            alert('Latitude must be between -90 and 90');
+            return;
+        }
+        
+        if (lng < -180 || lng > 180) {
+            alert('Longitude must be between -180 and 180');
+            return;
+        }
+        
+        selectLocation(lat, lng, `Manual Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    }
+    
+    function selectLocation(lat, lng, address) {
+        currentLocation = { lat, lng };
+        document.getElementById('searchBtn').disabled = false;
+        document.getElementById('searchResults').innerHTML = `<p class="success">✅ Selected: ${address}</p>`;
+        log(`📍 Location selected: ${address} (${lat}, ${lng})`);
+    }
+    
+    // Update radius display
+    document.getElementById('radius').addEventListener('input', function() {
+        document.getElementById('radiusValue').textContent = this.value + 'm';
+    });
+    
+    // Form submission
+    document.getElementById('searchForm').onsubmit = async function(e) {
+        e.preventDefault();
+        
+        if (!currentLocation) {
+            alert('Please set a location first');
+            return;
+        }
+        
+        const radius = parseInt(document.getElementById('radius').value);
+        const price = document.getElementById('price').value;
+        const cuisine = document.getElementById('cuisine').value;
+        const dietary = document.getElementById('dietary').value.split(',').map(s => s.trim()).filter(Boolean);
+        const open_now = document.getElementById('open_now').checked;
+        const min_rating = parseFloat(document.getElementById('min_rating').value);
+        const filters = { radius, price, cuisine, dietary, open_now, min_rating };
+        const body = { location: currentLocation, filters };
+        
+        document.getElementById('results').innerHTML = 'Loading...';
+        log('🔍 Searching for restaurants...');
+        
+        try {
+            const res = await fetch('/restaurants', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            
+            if (data.error) {
+                document.getElementById('results').innerHTML = `<p>Error: ${data.error}</p>`;
+                log(`❌ API Error: ${data.error}`);
+                return;
+            }
+            
+            if (data.results && data.results.length) {
+                // Sort results by distance
+                const sortedResults = data.results.sort((a, b) => {
+                    if (a.distance === null || a.distance === undefined) return 1;
+                    if (b.distance === null || b.distance === undefined) return -1;
+                    return a.distance - b.distance;
+                });
+                
+                document.getElementById('results').innerHTML = '<h2>Results</h2>' + sortedResults.map(r => {
+                    let photosHtml = '';
+                    if (r.photos && r.photos.length > 0) {
+                        photosHtml = `
+                            <div class="restaurant-photos">
+                                ${r.photos.map(photo => `
+                                    <img src="${photo.url}" alt="${r.name}" class="restaurant-photo" loading="lazy" 
+                                         onerror="this.style.display='none'; this.nextElementSibling && this.nextElementSibling.style.display='block';"
+                                         onload="this.style.display='block'; this.nextElementSibling && this.nextElementSibling.style.display='none';">
+                                    <div class="photo-placeholder" style="display: none;">
+                                        <span>📸 Photo unavailable</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    
+                    let menuInfoHtml = '';
+                    if (r.menu_info) {
+                        const menuInfo = r.menu_info;
+                        const menuFeatures = [];
+                        
+                        if (menuInfo.website) menuFeatures.push(`<a href="${menuInfo.website}" target="_blank" class="menu-link">🌐 Website</a>`);
+                        if (menuInfo.serves_breakfast) menuFeatures.push('🌅 Breakfast');
+                        if (menuInfo.serves_lunch) menuFeatures.push('🍽️ Lunch');
+                        if (menuInfo.serves_dinner) menuFeatures.push('🌙 Dinner');
+                        if (menuInfo.serves_beer) menuFeatures.push('🍺 Beer');
+                        if (menuInfo.serves_wine) menuFeatures.push('🍷 Wine');
+                        if (menuInfo.delivery) menuFeatures.push('🚚 Delivery');
+                        if (menuInfo.takeout) menuFeatures.push('📦 Takeout');
+                        if (menuInfo.dine_in) menuFeatures.push('🪑 Dine-in');
+                        if (menuInfo.reservable) menuFeatures.push('📞 Reservations');
+                        if (menuInfo.outdoor_seating) menuFeatures.push('🌳 Outdoor Seating');
+                        
+                        if (menuFeatures.length > 0) {
+                            menuInfoHtml = `
+                                <div class="menu-info">
+                                    <h4>🍽️ Menu & Services</h4>
+                                    <div class="menu-features">
+                                        ${menuFeatures.join(' • ')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    let reviewsHtml = '';
+                    if (r.reviews && r.reviews.length > 0) {
+                        reviewsHtml = `
+                            <div class="reviews-section">
+                                <h4>💬 Recent Reviews</h4>
+                                ${r.reviews.map(review => `
+                                    <div class="review">
+                                        <div class="review-header">
+                                            <strong>${review.author_name}</strong>
+                                            <span class="review-rating">⭐ ${review.rating}/5</span>
+                                        </div>
+                                        <p class="review-text">${review.text}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    
+                    let contactInfoHtml = '';
+                    if (r.phone || r.website) {
+                        contactInfoHtml = `
+                            <div class="contact-info">
+                                ${r.phone ? `<p>📞 <a href="tel:${r.phone}">${r.phone}</a></p>` : ''}
+                                ${r.website ? `<p>🌐 <a href="${r.website}" target="_blank">Visit Website</a></p>` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    let descriptionHtml = '';
+                    if (r.editorial_summary) {
+                        descriptionHtml = `
+                            <div class="description">
+                                <p><em>${r.editorial_summary}</em></p>
+                            </div>
+                        `;
+                    }
+                    
+                    return `
+                        <div class="restaurant">
+                            <div class="restaurant-header">
+                                <h3>${r.name} (${r.source})</h3>
+                                <div class="restaurant-meta">
+                                    <span class="rating">⭐ ${r.rating} (${r.user_ratings_total} reviews)</span>
+                                    <span class="price">${'$'.repeat(r.price_level || 0)}</span>
+                                    <span class="distance">📍 ${r.distance ? r.distance.toFixed(0) + 'm' : 'N/A'}</span>
+                                </div>
+                            </div>
+                            
+                            ${photosHtml}
+                            
+                            <div class="restaurant-details">
+                                <p class="address">📍 ${r.address}</p>
+                                <p class="status">🕒 ${r.open_now ? 'Open Now' : 'Closed'}</p>
+                                <p class="tags">🏷️ ${r.types ? r.types.join(', ') : 'N/A'}</p>
+                                
+                                ${descriptionHtml}
+                                ${contactInfoHtml}
+                                ${menuInfoHtml}
+                                ${reviewsHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                log(`✅ Found ${data.results.length} restaurants`);
+            } else {
+                document.getElementById('results').innerHTML = '<p>No results found.</p>';
+                log('ℹ️ No restaurants found');
+            }
+        } catch (error) {
+            document.getElementById('results').innerHTML = '<p>Error loading results. Please try again.</p>';
+            log(`❌ Request error: ${error.message}`);
+        }
+    };
+    
+    // Cache management functions
+    async function getCacheStats() {
+        try {
+            const response = await fetch('/cache/stats');
+            const stats = await response.json();
+            document.getElementById('cache-files').textContent = stats.total_files;
+            document.getElementById('cache-size').textContent = stats.total_size_mb + ' MB';
+        } catch (error) {
+            console.error('Error getting cache stats:', error);
+        }
+    }
+    
+    async function cleanupCache() {
+        try {
+            const response = await fetch('/cache/cleanup', { method: 'POST' });
+            const result = await response.json();
+            alert(result.message);
+            getCacheStats();
+        } catch (error) {
+            console.error('Error cleaning up cache:', error);
+        }
+    }
+    
+    async function clearCache() {
+        if (confirm('Are you sure you want to clear all cache? This will force fresh API calls.')) {
+            try {
+                const response = await fetch('/cache/clear', { method: 'POST' });
+                const result = await response.json();
+                alert(result.message);
+                getCacheStats();
+            } catch (error) {
+                console.error('Error clearing cache:', error);
+            }
+        }
+    }
+    
+    // Load cache stats on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        getCacheStats();
+    });
+    </script>
+</body>
+</html> 
