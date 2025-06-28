@@ -238,13 +238,20 @@
     
     // Display results function
     function displayResults(results) {
+        console.log('🎯 displayResults called with:', results);
+        console.log('🎯 Results type:', typeof results);
+        console.log('🎯 Results length:', results ? results.length : 'undefined');
+        
         if (results && results.length > 0) {
+            console.log('✅ Processing results for display');
             // Sort results by distance
             const sortedResults = results.sort((a, b) => {
                 if (a.distance === null || a.distance === undefined) return 1;
                 if (b.distance === null || b.distance === undefined) return -1;
                 return a.distance - b.distance;
             });
+            
+            console.log('✅ Sorted results:', sortedResults.length);
             
             document.getElementById('results').innerHTML = '<h2>Results</h2>' + sortedResults.map(r => {
                 let photosHtml = '';
@@ -868,12 +875,18 @@
             // Hide loading spinner
             document.getElementById('loading-spinner').style.display = 'none';
             
+            console.log('🔍 API Response:', data);
+            console.log('🔍 Results array:', data.results);
+            console.log('🔍 Results length:', data.results ? data.results.length : 'undefined');
+            
             if (data.results && data.results.length > 0) {
+                console.log('✅ Found results, calling displayResults');
                 displayResults(data.results);
                 if (data.search_log) {
                     data.search_log.forEach(log);
                 }
             } else {
+                console.log('❌ No results found in response');
                 log(`❌ Search failed: ${data.error || 'No results found'}`);
                 document.getElementById('results').innerHTML = `<p>Search failed: ${data.error || 'No results found'}</p>`;
             }
@@ -1117,8 +1130,8 @@
             // Hide loading spinner
             document.getElementById('loading-spinner').style.display = 'none';
             
-            if (data.restaurants && data.restaurants.length > 0) {
-                displayResults(data.restaurants);
+            if (data.results && data.results.length > 0) {
+                displayResults(data.results);
             } else {
                 document.getElementById('results').innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No restaurants found. Try adjusting your filters or location.</p>';
             }
