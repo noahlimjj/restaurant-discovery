@@ -117,7 +117,16 @@
             <button onclick="searchFood()" class="search-btn">🔍 Search Restaurants & Cafes</button>
         </div>
         
-        <div id="results"></div>
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" style="display: none; text-align: center; padding: 40px; margin: 20px 0;">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: #666; font-size: 16px;">Searching for restaurants...</p>
+        </div>
+        
+        <!-- Results Container -->
+        <div id="results-container">
+            <div id="results"></div>
+        </div>
         
         <!-- Cache Management Section -->
         <div class="cache-section">
@@ -912,6 +921,10 @@
     function performSpecificSearch(restaurantName, location) {
         log(`🔍 Searching for "${restaurantName}" at ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
         
+        // Show loading spinner
+        document.getElementById('loading-spinner').style.display = 'block';
+        document.getElementById('results').innerHTML = '';
+        
         fetch('/search-restaurant', {
             method: 'POST',
             headers: {
@@ -924,6 +937,9 @@
         })
         .then(response => response.json())
         .then(data => {
+            // Hide loading spinner
+            document.getElementById('loading-spinner').style.display = 'none';
+            
             if (data.results && data.results.length > 0) {
                 displayResults(data.results);
                 log(`✅ Found ${data.results.length} results for "${restaurantName}"`);
@@ -933,6 +949,8 @@
             }
         })
         .catch(error => {
+            // Hide loading spinner on error
+            document.getElementById('loading-spinner').style.display = 'none';
             log(`❌ Error: ${error.message}`);
             document.getElementById('results').innerHTML = `<p>Error searching for "${restaurantName}": ${error.message}</p>`;
         });
@@ -1053,6 +1071,53 @@
         } else {
             content.style.display = 'none';
             button.textContent = button.textContent.replace('Hide', 'Show');
+        }
+    }
+
+    async function searchRestaurants() {
+        const location = getCurrentLocation();
+        if (!location) {
+            alert('Please enable location access or enter a location');
+            return;
+        }
+
+        const filters = getFilters();
+        
+        // Show loading spinner
+        document.getElementById('loading-spinner').style.display = 'block';
+        document.getElementById('results').innerHTML = '';
+        
+        try {
+            const response = await fetch('/restaurants', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    location: location,
+                    filters: filters
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Hide loading spinner
+            document.getElementById('loading-spinner').style.display = 'none';
+            
+            if (data.restaurants && data.restaurants.length > 0) {
+                displayResults(data.restaurants);
+            } else {
+                document.getElementById('results').innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No restaurants found. Try adjusting your filters or location.</p>';
+            }
+        } catch (error) {
+            // Hide loading spinner on error
+            document.getElementById('loading-spinner').style.display = 'none';
+            console.error('Error:', error);
+            document.getElementById('results').innerHTML = '<p style="text-align: center; color: #dc3545; padding: 40px;">Search failed: ' + error.message + '</p>';
         }
     }
     </script>
