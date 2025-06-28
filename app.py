@@ -239,47 +239,127 @@ def restaurants():
         data = request.get_json()
         location = data.get('location')
         filters = data.get('filters', {})
-        # DEBUG: Print incoming request
-        print(f"[DEBUG] Incoming /restaurants request: location={location}, filters={filters}")
-
-        # Use broadest possible search for debugging
-        lat = location.get('lat')
-        lng = location.get('lng')
-        radius = filters.get('radius', 5000)
         
-        google_api_key = os.getenv('GOOGLE_API_KEY')
-        url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        params = {
-            'key': google_api_key,
-            'location': f'{lat},{lng}',
-            'radius': radius,
-            'type': 'restaurant',
-        }
-        print(f"[DEBUG] Google Places API params: {params}")
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
-        print(f"[DEBUG] Google Places API status: {data.get('status')}")
-        print(f"[DEBUG] Google Places API results count: {len(data.get('results', []))}")
-        if data.get('status') != 'OK' or not data.get('results'):
-            return jsonify({
-                'status': 'error',
-                'message': 'No results from Google Places',
-                'google_status': data.get('status'),
-                'google_error_message': data.get('error_message'),
-                'params': params,
-                'raw_response': data
-            }), 200
-        # Return raw results for debugging
+        if not location:
+            return jsonify({'error': 'Location is required'}), 400
+        
+        print(f"🔍 Searching for restaurants at {location['lat']}, {location['lng']}")
+        print(f"📋 Filters: {filters}")
+        
+        # Search using Google Places API
+        results, search_log = search_google_places_sync(location, filters)
+        
+        # Apply filters
+        filtered_results = results.copy()
+        
+        # Filter by minimum rating
+        if filters.get('min_rating', 0) > 0:
+            filtered_results = [r for r in filtered_results if r.get('rating', 0) >= filters['min_rating']]
+        
+        # Filter by open now
+        if filters.get('open_now'):
+            filtered_results = [r for r in filtered_results if r.get('open_now') is True]
+        
+        # Filter by cuisine type
+        if filters.get('cuisine'):
+            cuisine = filters['cuisine'].lower()
+            cuisine_keywords = {
+                'japanese': ['japanese', 'sushi', 'ramen', 'tempura', 'bento', 'izakaya', 'teppanyaki'],
+                'chinese': ['chinese', 'dim sum', 'szechuan', 'cantonese', 'peking'],
+                'italian': ['italian', 'pizza', 'pasta', 'ristorante', 'trattoria'],
+                'indian': ['indian', 'curry', 'tandoori', 'biryani', 'masala'],
+                'thai': ['thai', 'pad thai', 'tom yum', 'green curry'],
+                'korean': ['korean', 'bbq', 'bibimbap', 'kimchi', 'bulgogi'],
+                'mexican': ['mexican', 'taco', 'burrito', 'enchilada', 'quesadilla'],
+                'american': ['american', 'burger', 'steak', 'bbq', 'diner'],
+                'french': ['french', 'bistro', 'brasserie', 'crepe', 'croissant'],
+                'mediterranean': ['mediterranean', 'greek', 'lebanese', 'turkish', 'falafel']
+            }
+            
+            keywords = cuisine_keywords.get(cuisine, [cuisine])
+            filtered_results = [r for r in filtered_results 
+                              if any(keyword in r['name'].lower() or 
+                                    any(keyword in t.lower() for t in r.get('types', []))
+                                    for keyword in keywords)]
+        
+        # Filter by price level
+        if filters.get('price_level') is not None:
+            filtered_results = [r for r in filtered_results 
+                              if r.get('price_level') == filters['price_level']]
+        
+        print(f"Processed {len(results)} Google Places results")
+        print(f"After filtering: {len(filtered_results)} restaurants")
+        
+        # Get photos for top results
+        if filtered_results:
+            filtered_results = get_restaurant_photos(filtered_results[:20])  # Limit to top 20 for photos
+        
+        # Log search details
+        for log_entry in search_log:
+            print(log_entry)
+        
         return jsonify({
-            'status': 'success',
-            'results': data.get('results'),
-            'google_status': data.get('status'),
-            'params': params
+            'results': filtered_results,
+            'search_log': search_log,
+            'total_found': len(results),
+            'total_filtered': len(filtered_results)
         })
+        
     except Exception as e:
+        print(f"❌ Error in restaurant search: {str(e)}")
         import traceback
-        print(f"[ERROR] Exception in /restaurants: {e}\n{traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        print(traceback.format_exc())
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+
+def get_restaurant_photos(restaurants, max_photos=3):
+    """Get photos for restaurants using Google Places Photo API"""
+    google_api_key = os.getenv('GOOGLE_API_KEY')
+    if not google_api_key:
+        return restaurants
+    
+    print(f"📸 Fetching photos for {len(restaurants)} restaurants...")
+    
+    for restaurant in restaurants:
+        if not restaurant.get('id'):
+            continue
+            
+        try:
+            # Get place details to get photo references
+            details_url = 'https://maps.googleapis.com/maps/api/place/details/json'
+            details_params = {
+                'key': google_api_key,
+                'place_id': restaurant['id'],
+                'fields': 'photos'
+            }
+            
+            response = requests.get(details_url, params=details_params, timeout=5)
+            data = response.json()
+            
+            if data.get('status') == 'OK' and data.get('result', {}).get('photos'):
+                photos = []
+                for photo in data['result']['photos'][:max_photos]:
+                    photo_url = f"https://maps.googleapis.com/maps/api/place/photo"
+                    photo_params = {
+                        'key': google_api_key,
+                        'photoreference': photo['photo_reference'],
+                        'maxwidth': 400,
+                        'maxheight': 300
+                    }
+                    photos.append({
+                        'url': photo_url,
+                        'params': photo_params,
+                        'width': photo.get('width'),
+                        'height': photo.get('height')
+                    })
+                restaurant['photos'] = photos
+            else:
+                restaurant['photos'] = []
+                
+        except Exception as e:
+            print(f"❌ Error getting photos for {restaurant.get('name', 'Unknown')}: {str(e)}")
+            restaurant['photos'] = []
+    
+    return restaurants
 
 @app.route('/geocode', methods=['POST'])
 def geocode():
