@@ -18,8 +18,10 @@
         <div class="location-section">
             <h3>📍 Location</h3>
             <div class="location-toggle">
-                <button id="useMyLocationBtn" class="btn btn-primary active" onclick="setLocationMode('my-location')">Use My Location</button>
-                <button id="searchLocationBtn" class="btn btn-secondary" onclick="setLocationMode('search-location')">Search Location</button>
+                <input type="radio" id="use-my-location" name="location-type" value="my-location" checked>
+                <label for="use-my-location">Use My Location</label>
+                <input type="radio" id="search-location" name="location-type" value="search-location">
+                <label for="search-location">Search Location</label>
             </div>
             
             <!-- My Location Mode -->
@@ -33,7 +35,7 @@
             <!-- Search Location Mode -->
             <div id="searchLocationMode" class="location-mode">
                 <div class="search-location-form">
-                    <input type="text" id="locationSearch" placeholder="Enter city, address, or landmark (e.g., 'San Francisco, CA', 'Times Square, NY')" class="form-control">
+                    <input type="text" id="location-input" placeholder="Enter city, address, or landmark (e.g., 'San Francisco, CA', 'Times Square, NY')" class="form-control">
                     <button onclick="searchLocation()" class="btn btn-success">🔍 Search Location</button>
                 </div>
                 <div id="searchResults" class="search-results"></div>
@@ -163,9 +165,9 @@
     function setLocationMode(mode) {
         currentLocationMode = mode;
         
-        // Update button states
-        document.getElementById('useMyLocationBtn').className = mode === 'my-location' ? 'btn btn-primary active' : 'btn btn-secondary';
-        document.getElementById('searchLocationBtn').className = mode === 'search-location' ? 'btn btn-primary active' : 'btn btn-secondary';
+        // Update radio button states
+        document.getElementById('use-my-location').checked = mode === 'my-location';
+        document.getElementById('search-location').checked = mode === 'search-location';
         
         // Show/hide mode sections
         document.getElementById('myLocationMode').className = mode === 'my-location' ? 'location-mode active' : 'location-mode';
@@ -173,11 +175,166 @@
         
         // Clear current location when switching modes
         currentLocation = null;
-        document.getElementById('searchBtn').disabled = true;
         document.getElementById('locationStatus').textContent = '';
         document.getElementById('searchResults').innerHTML = '';
         
         log(`📍 Switched to ${mode} mode`);
+    }
+    
+    // Add event listeners for radio buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('use-my-location').addEventListener('change', function() {
+            if (this.checked) setLocationMode('my-location');
+        });
+        
+        document.getElementById('search-location').addEventListener('change', function() {
+            if (this.checked) setLocationMode('search-location');
+        });
+        
+        getCacheStats();
+    });
+    
+    // Geocoding function
+    function geocodeLocation(locationText) {
+        fetch('/geocode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: locationText })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.results && data.results.length > 0) {
+                const location = data.results[0];
+                performSearch(location);
+            } else {
+                log(`❌ Could not find location: ${locationText}`);
+                alert(`Could not find location: ${locationText}`);
+            }
+        })
+        .catch(error => {
+            log(`❌ Geocoding error: ${error.message}`);
+            alert(`Error finding location: ${error.message}`);
+        });
+    }
+    
+    // Display results function
+    function displayResults(results) {
+        if (results && results.length > 0) {
+            // Sort results by distance
+            const sortedResults = results.sort((a, b) => {
+                if (a.distance === null || a.distance === undefined) return 1;
+                if (b.distance === null || b.distance === undefined) return -1;
+                return a.distance - b.distance;
+            });
+            
+            document.getElementById('results').innerHTML = '<h2>Results</h2>' + sortedResults.map(r => {
+                let photosHtml = '';
+                if (r.photos && r.photos.length > 0) {
+                    photosHtml = '<div class="restaurant-photos">';
+                    r.photos.forEach(photo => {
+                        const photoUrl = `${photo.url}?key={{ google_api_key }}&photoreference=${encodeURIComponent(photo.params.photoreference)}&maxwidth=${photo.params.maxwidth}&maxheight=${photo.params.maxheight}`;
+                        photosHtml += `<img src="${photoUrl}" alt="${r.name}" onerror="this.style.display='none'">`;
+                    });
+                    photosHtml += '</div>';
+                }
+                
+                let descriptionHtml = '';
+                if (r.editorial_summary) {
+                    descriptionHtml = `<div class="description"><p>${r.editorial_summary}</p></div>`;
+                }
+                
+                let contactInfoHtml = '';
+                if (r.phone || r.website || r.google_url) {
+                    contactInfoHtml = '<div class="contact-info">';
+                    if (r.phone) {
+                        contactInfoHtml += `<p>📞 <a href="tel:${r.phone}">${r.phone}</a></p>`;
+                    }
+                    if (r.website) {
+                        contactInfoHtml += `<p>🌐 <a href="${r.website}" target="_blank">Visit Website</a></p>`;
+                    }
+                    if (r.google_url) {
+                        contactInfoHtml += `<p>🗺️ <a href="${r.google_url}" target="_blank">View on Google Maps</a></p>`;
+                    }
+                    contactInfoHtml += '</div>';
+                }
+                
+                let menuInfoHtml = '';
+                if (r.website || r.google_url) {
+                    menuInfoHtml = '<div class="menu-info">';
+                    menuInfoHtml += '<h4>📋 Menu & Information</h4>';
+                    if (r.website) {
+                        menuInfoHtml += `<p>🍽️ <a href="${r.website}" target="_blank" class="menu-link">View Menu & Website</a></p>`;
+                    }
+                    if (r.google_url) {
+                        menuInfoHtml += `<p>📖 <a href="${r.google_url}" target="_blank" class="menu-link">View on Google Maps (may have menu)</a></p>`;
+                    }
+                    menuInfoHtml += '</div>';
+                }
+                
+                let openingHoursHtml = '';
+                if (r.opening_hours && r.opening_hours.length > 0) {
+                    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+                    openingHoursHtml = '<div class="opening-hours">';
+                    openingHoursHtml += '<h4>🕒 Opening Hours</h4>';
+                    r.opening_hours.forEach(day => {
+                        const isToday = day.toLowerCase().includes(today.toLowerCase());
+                        const dayClass = isToday ? 'today' : '';
+                        openingHoursHtml += `<p class="${dayClass}">${day}</p>`;
+                    });
+                    openingHoursHtml += '</div>';
+                }
+                
+                let reviewsHtml = '';
+                if (r.reviews && r.reviews.length > 0) {
+                    reviewsHtml = '<div class="reviews">';
+                    reviewsHtml += '<h4>💬 Recent Reviews</h4>';
+                    r.reviews.forEach(review => {
+                        reviewsHtml += `
+                            <div class="review">
+                                <div class="review-author">${review.author} <span class="review-rating">⭐ ${review.rating}/5</span></div>
+                                <div class="review-text">"${review.text}"</div>
+                                <small>${review.time}</small>
+                            </div>
+                        `;
+                    });
+                    reviewsHtml += '</div>';
+                }
+                
+                return `
+                    <div class="restaurant">
+                        <div class="restaurant-header">
+                            <h3>${r.name} (${r.source})</h3>
+                            <div class="restaurant-meta">
+                                <span class="rating">⭐ ${r.rating} (${r.user_ratings_total} reviews)</span>
+                                <span class="price">${'$'.repeat(r.price_level || 0)}</span>
+                                <span class="distance">📍 ${r.distance ? r.distance.toFixed(0) + 'm' : 'N/A'}</span>
+                            </div>
+                        </div>
+                        
+                        ${photosHtml}
+                        
+                        <div class="restaurant-details">
+                            <p class="address">📍 ${r.address}</p>
+                            <p class="status ${r.open_now ? 'open' : 'closed'}">🕒 ${r.open_now ? '🟢 Open Now' : '🔴 Closed'}</p>
+                            <p class="establishment-type">🏪 Type: ${getEstablishmentType(r.types)}</p>
+                            <p class="tags">🏷️ ${r.types ? r.types.join(', ') : 'N/A'}</p>
+                            
+                            ${descriptionHtml}
+                            ${contactInfoHtml}
+                            ${menuInfoHtml}
+                            ${openingHoursHtml}
+                            ${reviewsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            log(`✅ Found ${results.length} food establishments`);
+        } else {
+            document.getElementById('results').innerHTML = '<p>No food establishments found.</p>';
+            log('ℹ️ No food establishments found');
+        }
     }
     
     // My Location Functions
@@ -280,7 +437,7 @@
     
     // Location Search Functions
     async function searchLocation() {
-        const searchInput = document.getElementById('locationSearch').value.trim();
+        const searchInput = document.getElementById('location-input').value.trim();
         const searchResults = document.getElementById('searchResults');
         const searchBtn = document.getElementById('searchBtn');
         
@@ -783,4 +940,4 @@
     }
     </script>
 </body>
-</html> 
+</html>
