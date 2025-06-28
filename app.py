@@ -942,6 +942,23 @@ def search_manual_restaurants(location, filters):
     
     return filtered_results
 
+@app.route('/version')
+def version():
+    return jsonify({
+        'version': '2.0',
+        'features': [
+            'Enhanced restaurant search with multiple strategies',
+            'Photos from Google Places API',
+            'Detailed opening hours with today highlighted',
+            'Menu and website links',
+            'Specific restaurant search',
+            'Manual restaurant database',
+            'Popular chain searches'
+        ],
+        'status': 'Enhanced Food Discovery App is running!',
+        'api_key_configured': bool(os.getenv('GOOGLE_API_KEY'))
+    })
+
 if __name__ == "__main__":
     import os
     
