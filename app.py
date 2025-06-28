@@ -613,7 +613,7 @@ def get_restaurant_details(restaurants, max_photos=3):
                 # Add reviews
                 reviews = []
                 if result.get('reviews'):
-                    for review in result['reviews'][:3]:  # Limit to 3 reviews
+                    for review in result['reviews'][:1]:  # Limit to 1 review
                         reviews.append({
                             'author': review.get('author_name'),
                             'rating': review.get('rating'),
