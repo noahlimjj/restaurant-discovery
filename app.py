@@ -234,55 +234,52 @@ def test_places():
         })
 
 @app.route('/restaurants', methods=['POST'])
-def get_restaurants():
+def restaurants():
     try:
         data = request.get_json()
         location = data.get('location')
         filters = data.get('filters', {})
+        # DEBUG: Print incoming request
+        print(f"[DEBUG] Incoming /restaurants request: location={location}, filters={filters}")
+
+        # Use broadest possible search for debugging
+        lat = location.get('lat')
+        lng = location.get('lng')
+        radius = filters.get('radius', 5000)
         
-        if not location:
-            return jsonify({'error': 'Location is required'}), 400
-        
-        print(f"🔍 Searching for restaurants at {location['lat']}, {location['lng']}")
-        
-        # Search using Google Places API
-        results, search_log = search_google_places_sync(location, filters)
-        
-        # Apply basic filters
-        filtered_results = results.copy()
-        
-        # Filter by minimum rating
-        if filters.get('min_rating', 0) > 0:
-            filtered_results = [r for r in filtered_results if r.get('rating', 0) >= filters['min_rating']]
-        
-        # Filter by open now
-        if filters.get('open_now'):
-            filtered_results = [r for r in filtered_results if r.get('open_now') is True]
-        
-        # Filter by cuisine
-        if filters.get('cuisine'):
-            cuisine = filters['cuisine'].lower()
-            filtered_results = [r for r in filtered_results 
-                              if cuisine in r['name'].lower() or 
-                              any(cuisine in t.lower() for t in r.get('types', []))]
-        
-        print(f"Processed {len(results)} Google Places results")
-        print(f"After filtering: {len(filtered_results)} restaurants")
-        
-        # Log search details
-        for log_entry in search_log:
-            print(log_entry)
-        
+        google_api_key = os.getenv('GOOGLE_API_KEY')
+        url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+        params = {
+            'key': google_api_key,
+            'location': f'{lat},{lng}',
+            'radius': radius,
+            'type': 'restaurant',
+        }
+        print(f"[DEBUG] Google Places API params: {params}")
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        print(f"[DEBUG] Google Places API status: {data.get('status')}")
+        print(f"[DEBUG] Google Places API results count: {len(data.get('results', []))}")
+        if data.get('status') != 'OK' or not data.get('results'):
+            return jsonify({
+                'status': 'error',
+                'message': 'No results from Google Places',
+                'google_status': data.get('status'),
+                'google_error_message': data.get('error_message'),
+                'params': params,
+                'raw_response': data
+            }), 200
+        # Return raw results for debugging
         return jsonify({
-            'results': filtered_results,
-            'search_log': search_log,
-            'total_found': len(results),
-            'total_filtered': len(filtered_results)
+            'status': 'success',
+            'results': data.get('results'),
+            'google_status': data.get('status'),
+            'params': params
         })
-        
     except Exception as e:
-        print(f"❌ Error in restaurant search: {str(e)}")
-        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+        import traceback
+        print(f"[ERROR] Exception in /restaurants: {e}\n{traceback.format_exc()}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/geocode', methods=['POST'])
 def geocode():
