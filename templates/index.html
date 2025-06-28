@@ -849,6 +849,10 @@
         log(`🔍 Searching for food establishments at ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
         log(`📊 Filters: ${radius}m radius, ${cuisine || 'all cuisines'}, ${minRating}+ stars, ${priceLevel || 'any price'}`);
         
+        // Show loading spinner
+        document.getElementById('loading-spinner').style.display = 'block';
+        document.getElementById('results').innerHTML = '';
+        
         fetch('/restaurants', {
             method: 'POST',
             headers: {
@@ -861,8 +865,11 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data.results && data.results.length > 0) {
-                displayResults(data.results);
+            // Hide loading spinner
+            document.getElementById('loading-spinner').style.display = 'none';
+            
+            if (data.restaurants && data.restaurants.length > 0) {
+                displayResults(data.restaurants);
                 if (data.log) {
                     data.log.forEach(log);
                 }
@@ -872,6 +879,8 @@
             }
         })
         .catch(error => {
+            // Hide loading spinner on error
+            document.getElementById('loading-spinner').style.display = 'none';
             log(`❌ Error: ${error.message}`);
             document.getElementById('results').innerHTML = `<p>Error: ${error.message}</p>`;
         });
