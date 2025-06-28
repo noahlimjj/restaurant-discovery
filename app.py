@@ -84,15 +84,22 @@ def search_google_places_sync(location, filters):
             'key': google_api_key,
             'location': f"{location['lat']},{location['lng']}",
             'radius': radius,
-            'type': 'restaurant',
-            'rankby': 'distance'
+            'type': 'restaurant'
         }
         
+        print(f"🔍 Making Google Places API request with params: {params}")
         response = requests.get(url, params=params, timeout=10)
         data = response.json()
         
-        if data.get('status') != 'OK':
-            search_log.append(f"❌ Google Places API error: {data.get('status')}")
+        print(f"📊 Google Places API response status: {data.get('status')}")
+        print(f"📊 Google Places API error message: {data.get('error_message', 'None')}")
+        
+        if data.get('status') == 'INVALID_REQUEST':
+            search_log.append(f"❌ Google Places API not enabled. Please enable 'Places API' in your Google Cloud Console.")
+            search_log.append(f"🔧 Go to: https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
+            return [], search_log
+        elif data.get('status') != 'OK':
+            search_log.append(f"❌ Google Places API error: {data.get('status')} - {data.get('error_message', 'Unknown error')}")
             return [], search_log
         
         results = []
@@ -233,6 +240,89 @@ def test_places():
             'message': f'Places API test failed: {str(e)}'
         })
 
+@app.route('/test-all-apis')
+def test_all_apis():
+    """Test all Google APIs and provide setup instructions"""
+    google_api_key = os.getenv('GOOGLE_API_KEY')
+    if not google_api_key:
+        return jsonify({
+            'status': 'error',
+            'message': 'Google API key not configured',
+            'setup_instructions': [
+                '1. Go to Google Cloud Console: https://console.cloud.google.com/',
+                '2. Create a new project or select existing one',
+                '3. Go to APIs & Services > Credentials',
+                '4. Create an API key',
+                '5. Set it as GOOGLE_API_KEY environment variable in Render'
+            ]
+        })
+    
+    results = {
+        'api_key_configured': True,
+        'api_key_preview': google_api_key[:10] + '...',
+        'apis': {}
+    }
+    
+    # Test Geocoding API
+    try:
+        geocode_url = 'https://maps.googleapis.com/maps/api/geocode/json'
+        geocode_params = {
+            'key': google_api_key,
+            'address': 'San Francisco, CA'
+        }
+        response = requests.get(geocode_url, params=geocode_params, timeout=5)
+        data = response.json()
+        results['apis']['geocoding'] = {
+            'status': data.get('status'),
+            'enabled': data.get('status') == 'OK',
+            'error_message': data.get('error_message')
+        }
+    except Exception as e:
+        results['apis']['geocoding'] = {
+            'status': 'error',
+            'enabled': False,
+            'error_message': str(e)
+        }
+    
+    # Test Places API
+    try:
+        places_url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+        places_params = {
+            'key': google_api_key,
+            'location': '37.7749,-122.4194',
+            'radius': 1000,
+            'type': 'restaurant'
+        }
+        response = requests.get(places_url, params=places_params, timeout=5)
+        data = response.json()
+        results['apis']['places'] = {
+            'status': data.get('status'),
+            'enabled': data.get('status') == 'OK',
+            'error_message': data.get('error_message'),
+            'results_count': len(data.get('results', []))
+        }
+    except Exception as e:
+        results['apis']['places'] = {
+            'status': 'error',
+            'enabled': False,
+            'error_message': str(e)
+        }
+    
+    # Generate setup instructions
+    setup_instructions = []
+    if not results['apis'].get('geocoding', {}).get('enabled'):
+        setup_instructions.append('Enable Geocoding API: https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com')
+    if not results['apis'].get('places', {}).get('enabled'):
+        setup_instructions.append('Enable Places API: https://console.cloud.google.com/apis/library/places-backend.googleapis.com')
+    
+    if setup_instructions:
+        results['setup_instructions'] = setup_instructions
+        results['status'] = 'needs_setup'
+    else:
+        results['status'] = 'all_working'
+    
+    return jsonify(results)
+
 @app.route('/restaurants', methods=['POST'])
 def restaurants():
     try:
@@ -315,11 +405,12 @@ def get_restaurant_photos(restaurants, max_photos=3):
     """Get photos for restaurants using Google Places Photo API"""
     google_api_key = os.getenv('GOOGLE_API_KEY')
     if not google_api_key:
+        print("❌ No Google API key available for photos")
         return restaurants
     
     print(f"📸 Fetching photos for {len(restaurants)} restaurants...")
     
-    for restaurant in restaurants:
+    for i, restaurant in enumerate(restaurants):
         if not restaurant.get('id'):
             continue
             
@@ -352,8 +443,10 @@ def get_restaurant_photos(restaurants, max_photos=3):
                         'height': photo.get('height')
                     })
                 restaurant['photos'] = photos
+                print(f"✅ Got {len(photos)} photos for {restaurant.get('name', 'Unknown')}")
             else:
                 restaurant['photos'] = []
+                print(f"ℹ️ No photos available for {restaurant.get('name', 'Unknown')}")
                 
         except Exception as e:
             print(f"❌ Error getting photos for {restaurant.get('name', 'Unknown')}: {str(e)}")
