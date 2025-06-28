@@ -196,6 +196,43 @@ def test_api():
             'suggestion': 'Check your internet connection and API key'
         })
 
+@app.route('/test-places')
+def test_places():
+    """Test Google Places API specifically"""
+    google_api_key = os.getenv('GOOGLE_API_KEY')
+    if not google_api_key:
+        return jsonify({
+            'status': 'error',
+            'message': 'Google API key not configured'
+        })
+    
+    try:
+        # Test Places API directly
+        url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+        params = {
+            'key': google_api_key,
+            'location': '37.7749,-122.4194',  # San Francisco
+            'radius': 1000,
+            'type': 'restaurant'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        return jsonify({
+            'status': 'success',
+            'places_api_status': data.get('status'),
+            'error_message': data.get('error_message'),
+            'results_count': len(data.get('results', [])),
+            'raw_response': data
+        })
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Places API test failed: {str(e)}'
+        })
+
 @app.route('/restaurants', methods=['POST'])
 def get_restaurants():
     try:
