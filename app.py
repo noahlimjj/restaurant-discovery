@@ -105,7 +105,7 @@ def geocode():
         }), 400
 
 @app.route('/restaurants', methods=['POST'])
-async def get_restaurants():
+def get_restaurants():
     try:
         data = request.get_json()
         location = data.get('location')
@@ -117,7 +117,10 @@ async def get_restaurants():
         print(f"🔍 Searching for restaurants at {location['lat']}, {location['lng']}")
         
         # Search using Google Places API only
-        results, search_log = await search_all_apis(location, filters)
+        async def fetch_results():
+            return await search_all_apis(location, filters)
+        
+        results, search_log = asyncio.run(fetch_results())
         
         # Apply additional filters
         filtered_results = filter_results(results, filters)
