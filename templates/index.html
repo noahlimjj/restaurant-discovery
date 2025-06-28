@@ -45,6 +45,12 @@
 
         <div id="debug-info" style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px;"></div>
         
+        <!-- Debug Log -->
+        <div style="margin: 10px 0;">
+            <button onclick="toggleDebugLog()" class="btn btn-secondary" style="font-size: 0.8rem;">🔧 Toggle Debug Log</button>
+        </div>
+        <div id="log" style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto; display: none;"></div>
+        
         <!-- Filters -->
         <div class="filters">
             <h3>🔍 Search Filters</h3>
@@ -146,6 +152,7 @@
         const timestamp = new Date().toLocaleTimeString();
         logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
         logDiv.scrollTop = logDiv.scrollHeight;
+        logDiv.style.display = 'block'; // Show the log when there are messages
     }
     
     // Check if we're on HTTPS
@@ -1015,6 +1022,15 @@
                 maximumAge: 60000 // 1 minute
             }
         );
+    }
+
+    function toggleDebugLog() {
+        const logDiv = document.getElementById('log');
+        if (logDiv.style.display === 'none') {
+            logDiv.style.display = 'block';
+        } else {
+            logDiv.style.display = 'none';
+        }
     }
     </script>
 </body>
