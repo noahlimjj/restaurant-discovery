@@ -308,39 +308,23 @@ def create_self_signed_cert():
         print("OpenSSL not found. Please install OpenSSL or use HTTP instead.")
         return None, None
 
-if __name__ == '__main__':
-    # Get port from environment variable (for Heroku) or use default
-    port = int(os.environ.get('PORT', 5001))
+if __name__ == "__main__":
+    import os
     
-    # Check if we're in production (Heroku sets PORT)
-    if os.environ.get('PORT'):
-        # Production mode - use HTTP
+    # Get port from environment variable (for production) or use default
+    port = int(os.environ.get("PORT", 5001))
+    
+    # Check if we're in production (Render, Railway, etc.)
+    is_production = os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PORT")
+    
+    if is_production:
+        # Production: no SSL context, bind to all interfaces
         print(f"Starting Flask app in production mode on port {port}...")
-        app.run(host='0.0.0.0', port=port)
+        app.run(host="0.0.0.0", port=port)
     else:
-        # Development mode - use HTTPS
-        # Check if SSL certificates exist, create if not
-        cert_file = "cert.pem"
-        key_file = "key.pem"
-        
-        if not os.path.exists(cert_file) or not os.path.exists(key_file):
-            print("Creating self-signed SSL certificate...")
-            cert_file, key_file = create_self_signed_cert()
-            if cert_file and key_file:
-                print("SSL certificate created successfully!")
-            else:
-                print("Failed to create SSL certificate. Starting with HTTP...")
-                app.run(debug=True, host='0.0.0.0', port=port)
-                exit()
-        
+        # Development: use SSL context
         print("Starting Flask app with HTTPS...")
-        print("Access the app at: https://127.0.0.1:5001")
-        print("Test API with: https://127.0.0.1:5001/restaurants/sf")
+        print(f"Access the app at: https://127.0.0.1:{port}")
+        print(f"Test API with: https://127.0.0.1:{port}/restaurants/sf")
         print("Note: You may see a security warning in your browser. Click 'Advanced' and 'Proceed to localhost' to continue.")
-        
-        app.run(
-            debug=True, 
-            host='0.0.0.0', 
-            port=port,
-            ssl_context=(cert_file, key_file)
-        ) 
+        app.run(ssl_context=ssl_context, host="0.0.0.0", port=port) 

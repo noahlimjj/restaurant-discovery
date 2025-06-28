@@ -320,75 +320,68 @@ def get_mock_restaurants(location, filters):
     return mock_restaurants
 
 async def get_place_details(session, place_id, search_log):
-    """Get detailed information for a specific place including photos and menu"""
+    """Get detailed information for a specific place"""
     try:
-        params = {
-            'key': GOOGLE_API_KEY,
-            'place_id': place_id,
-            'fields': 'name,formatted_address,rating,user_ratings_total,price_level,opening_hours,photos,website,formatted_phone_number,reviews,editorial_summary,serves_beer,serves_wine,serves_breakfast,serves_lunch,serves_dinner,delivery,takeout,dine_in,reservable,outdoor_seating,wheelchair_accessible_entrance'
-        }
+        # Create a new session for this request to avoid session closed errors
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
         
-        async with session.get(GOOGLE_PLACE_DETAILS_URL, params=params) as resp:
-            data = await resp.json()
-            status = data.get('status')
-            
-            if status != 'OK':
-                search_log.append(f"  ❌ Details error for {place_id}: {status}")
-                return None
-            
-            result = data.get('result', {})
-            
-            # Get photos
-            photos = []
-            if 'photos' in result:
-                for photo in result['photos'][:3]:  # Limit to 3 photos
-                    photo_url = f"https://maps.googleapis.com/maps/api/place/photo?key={GOOGLE_API_KEY}&photoreference={photo['photo_reference']}&maxwidth=400"
-                    photos.append({
-                        'url': photo_url,
-                        'width': photo.get('width'),
-                        'height': photo.get('height')
-                    })
-            
-            # Get menu information
-            menu_info = {}
-            if result.get('website'):
-                menu_info['website'] = result['website']
-            
-            # Check for menu-related fields
-            menu_info['serves_breakfast'] = result.get('serves_breakfast', False)
-            menu_info['serves_lunch'] = result.get('serves_lunch', False)
-            menu_info['serves_dinner'] = result.get('serves_dinner', False)
-            menu_info['serves_beer'] = result.get('serves_beer', False)
-            menu_info['serves_wine'] = result.get('serves_wine', False)
-            menu_info['delivery'] = result.get('delivery', False)
-            menu_info['takeout'] = result.get('takeout', False)
-            menu_info['dine_in'] = result.get('dine_in', False)
-            menu_info['reservable'] = result.get('reservable', False)
-            menu_info['outdoor_seating'] = result.get('outdoor_seating', False)
-            
-            # Get reviews for menu hints
-            reviews = []
-            if 'reviews' in result:
-                for review in result['reviews'][:3]:  # Limit to 3 reviews
-                    reviews.append({
-                        'author_name': review.get('author_name'),
-                        'rating': review.get('rating'),
-                        'text': review.get('text', '')[:200] + '...' if len(review.get('text', '')) > 200 else review.get('text', ''),
-                        'time': review.get('time')
-                    })
-            
-            return {
-                'photos': photos,
-                'menu_info': menu_info,
-                'reviews': reviews,
-                'website': result.get('website'),
-                'phone': result.get('formatted_phone_number'),
-                'editorial_summary': result.get('editorial_summary', {}).get('overview')
+        async with aiohttp.ClientSession(connector=connector) as detail_session:
+            params = {
+                'key': GOOGLE_API_KEY,
+                'place_id': place_id,
+                'fields': 'photos,formatted_phone_number,website,opening_hours,reviews,price_level,rating,user_ratings_total'
             }
             
+            async with detail_session.get(GOOGLE_PLACE_DETAILS_URL, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get('status') == 'OK':
+                        result = data.get('result', {})
+                        
+                        # Extract photos
+                        photos = []
+                        if 'photos' in result:
+                            for photo in result['photos'][:3]:  # Limit to 3 photos
+                                photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={photo['photo_reference']}&key={GOOGLE_API_KEY}"
+                                photos.append({
+                                    'url': photo_url,
+                                    'width': photo.get('width', 400),
+                                    'height': photo.get('height', 300)
+                                })
+                        
+                        # Extract reviews
+                        reviews = []
+                        if 'reviews' in result:
+                            for review in result['reviews'][:3]:  # Limit to 3 reviews
+                                reviews.append({
+                                    'author_name': review.get('author_name', 'Anonymous'),
+                                    'rating': review.get('rating', 0),
+                                    'text': review.get('text', '')[:200] + '...' if len(review.get('text', '')) > 200 else review.get('text', ''),
+                                    'time': review.get('time', 0)
+                                })
+                        
+                        return {
+                            'photos': photos,
+                            'formatted_phone_number': result.get('formatted_phone_number'),
+                            'website': result.get('website'),
+                            'opening_hours': result.get('opening_hours', {}).get('weekday_text', []),
+                            'reviews': reviews,
+                            'price_level': result.get('price_level'),
+                            'rating': result.get('rating'),
+                            'user_ratings_total': result.get('user_ratings_total')
+                        }
+                    else:
+                        search_log.append(f"  ❌ Details API error: {data.get('status')}")
+                else:
+                    search_log.append(f"  ❌ Details HTTP error: {resp.status}")
+                    
     except Exception as e:
         search_log.append(f"  ❌ Exception getting details for {place_id}: {str(e)}")
-        return None
+    
+    return {}
 
 async def search_google_places(location, filters):
     # Check if API key is available
