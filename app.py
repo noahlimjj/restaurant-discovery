@@ -945,7 +945,7 @@ def version():
             'Manual restaurant database',
             'Location detection and search'
         ],
-        'status': 'Restaurant & Café Discovery App is running!',
+        'status': 'The Food Finder is running!',
         'api_key_configured': bool(os.getenv('GOOGLE_API_KEY'))
     })
 
