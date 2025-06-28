@@ -9,9 +9,9 @@
 <body>
     <div class="container">
         <header>
-            <h1>🍽️ Food Discovery App</h1>
-            <p>Find restaurants, cafes, bars, bakeries, and all food establishments near you</p>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">Version 2.0 - Enhanced with Photos, Opening Hours & More Restaurants</p>
+            <h1>🍽️ Restaurant & Café Discovery</h1>
+            <p>Find restaurants and cafes near you using Google Maps data</p>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">Version 2.1 - Simplified to Restaurants & Cafes Only</p>
         </header>
         
         <!-- Location Selection -->
@@ -105,7 +105,7 @@
                 </select>
             </div>
             
-            <button onclick="searchFood()" class="search-btn">🔍 Search Food Establishments</button>
+            <button onclick="searchFood()" class="search-btn">🔍 Search Restaurants & Cafes</button>
         </div>
         
         <div id="results"></div>
@@ -149,7 +149,7 @@
     if (location.protocol === 'https:') {
         log('✅ HTTPS detected - geolocation should work');
     } else {
-        log('❌ HTTP detected - geolocation may not work');
+        log('⚠️ HTTP detected - geolocation may work in some browsers');
     }
     
     // Check if geolocation is available

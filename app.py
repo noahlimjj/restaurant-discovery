@@ -102,20 +102,10 @@ def search_google_places_sync(location, filters):
         
         results = []
         
-        # Strategy 1: Search for all food-related establishment types
+        # Strategy 1: Search for restaurants and cafes only (simplified)
         food_types = [
             'restaurant',
-            'cafe', 
-            'bar',
-            'bakery',
-            'food',
-            'meal_takeaway',
-            'meal_delivery',
-            'liquor_store',
-            'convenience_store',
-            'grocery_or_supermarket',
-            'food_court',
-            'night_club'
+            'cafe'
         ]
         
         for food_type in food_types:
@@ -146,7 +136,7 @@ def search_google_places_sync(location, filters):
                 search_log.append(f"⚠️ {food_type} search returned: {data.get('status')}")
         
         # Strategy 2: Multiple radius searches to catch more places
-        radiuses = [radius, radius * 2, radius * 3]  # Search multiple radii
+        radiuses = [radius, radius * 2]  # Reduced to just 2 radii for speed
         for search_radius in radiuses:
             if search_radius > 50000:  # Google's max radius
                 continue
@@ -945,17 +935,17 @@ def search_manual_restaurants(location, filters):
 @app.route('/version')
 def version():
     return jsonify({
-        'version': '2.0',
+        'version': '2.1',
         'features': [
-            'Enhanced restaurant search with multiple strategies',
+            'Simplified restaurant and cafe search',
             'Photos from Google Places API',
             'Detailed opening hours with today highlighted',
             'Menu and website links',
             'Specific restaurant search',
             'Manual restaurant database',
-            'Popular chain searches'
+            'Location detection and search'
         ],
-        'status': 'Enhanced Food Discovery App is running!',
+        'status': 'Restaurant & Café Discovery App is running!',
         'api_key_configured': bool(os.getenv('GOOGLE_API_KEY'))
     })
 
@@ -966,4 +956,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
     
     print(f"Starting Flask app on port {port}...")
+    print(f"Access the app at: http://127.0.0.1:{port}")
+    print(f"Test API with: http://127.0.0.1:{port}/restaurants/sf")
     app.run(host="0.0.0.0", port=port, debug=False) 
