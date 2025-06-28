@@ -296,17 +296,23 @@
                 
                 let reviewsHtml = '';
                 if (r.reviews && r.reviews.length > 0) {
-                    reviewsHtml = '<div class="reviews">';
-                    reviewsHtml += '<h4>💬 Recent Reviews</h4>';
-                    r.reviews.forEach(review => {
-                        reviewsHtml += `
-                            <div class="review">
-                                <div class="review-author">${review.author} <span class="review-rating">⭐ ${review.rating}/5</span></div>
-                                <div class="review-text">"${review.text}"</div>
-                                <small>${review.time}</small>
+                    reviewsHtml = '<div class="reviews-section">';
+                    reviewsHtml += '<h4>📝 Recent Reviews</h4>';
+                    reviewsHtml += '<div class="reviews-dropdown">';
+                    reviewsHtml += `<button class="reviews-toggle" onclick="toggleReviews(this)">Show Reviews (${r.reviews.length})</button>`;
+                    reviewsHtml += '<div class="reviews-content" style="display: none;">';
+                    reviewsHtml += r.reviews.map(review => `
+                        <div class="review-item">
+                            <div class="review-header">
+                                <span class="review-author">${review.author || 'Anonymous'}</span>
+                                <span class="review-rating">${'⭐'.repeat(review.rating || 0)}</span>
+                                <span class="review-time">${review.time || ''}</span>
                             </div>
-                        `;
-                    });
+                            <div class="review-text">${review.text || 'No review text available'}</div>
+                        </div>
+                    `).join('');
+                    reviewsHtml += '</div>';
+                    reviewsHtml += '</div>';
                     reviewsHtml += '</div>';
                 }
                 
@@ -658,17 +664,23 @@
                     
                     let reviewsHtml = '';
                     if (r.reviews && r.reviews.length > 0) {
-                        reviewsHtml = '<div class="reviews">';
-                        reviewsHtml += '<h4>💬 Recent Reviews</h4>';
-                        r.reviews.forEach(review => {
-                            reviewsHtml += `
-                                <div class="review">
-                                    <div class="review-author">${review.author} <span class="review-rating">⭐ ${review.rating}/5</span></div>
-                                    <div class="review-text">"${review.text}"</div>
-                                    <small>${review.time}</small>
+                        reviewsHtml = '<div class="reviews-section">';
+                        reviewsHtml += '<h4>📝 Recent Reviews</h4>';
+                        reviewsHtml += '<div class="reviews-dropdown">';
+                        reviewsHtml += `<button class="reviews-toggle" onclick="toggleReviews(this)">Show Reviews (${r.reviews.length})</button>`;
+                        reviewsHtml += '<div class="reviews-content" style="display: none;">';
+                        reviewsHtml += r.reviews.map(review => `
+                            <div class="review-item">
+                                <div class="review-header">
+                                    <span class="review-author">${review.author || 'Anonymous'}</span>
+                                    <span class="review-rating">${'⭐'.repeat(review.rating || 0)}</span>
+                                    <span class="review-time">${review.time || ''}</span>
                                 </div>
-                            `;
-                        });
+                                <div class="review-text">${review.text || 'No review text available'}</div>
+                            </div>
+                        `).join('');
+                        reviewsHtml += '</div>';
+                        reviewsHtml += '</div>';
                         reviewsHtml += '</div>';
                     }
                     
@@ -1030,6 +1042,17 @@
             logDiv.style.display = 'block';
         } else {
             logDiv.style.display = 'none';
+        }
+    }
+    
+    function toggleReviews(button) {
+        const content = button.nextElementSibling;
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            button.textContent = button.textContent.replace('Show', 'Hide');
+        } else {
+            content.style.display = 'none';
+            button.textContent = button.textContent.replace('Hide', 'Show');
         }
     }
     </script>
