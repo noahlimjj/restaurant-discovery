@@ -467,7 +467,14 @@ def test_all_apis():
 @app.route('/restaurants', methods=['POST'])
 def restaurants():
     try:
+        # Ensure we always return JSON
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type must be application/json'}), 400
+            
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+            
         location = data.get('location')
         filters = data.get('filters', {})
         
@@ -499,25 +506,32 @@ def restaurants():
         
         # Filter by cuisine type
         if filters.get('cuisine') and filters.get('cuisine').strip():
-            cuisine = filters['cuisine'].lower()
-            cuisine_keywords = {
-                'japanese': ['japanese', 'sushi', 'ramen', 'tempura', 'bento', 'izakaya', 'teppanyaki'],
-                'chinese': ['chinese', 'dim sum', 'szechuan', 'cantonese', 'peking'],
-                'italian': ['italian', 'pizza', 'pasta', 'ristorante', 'trattoria'],
-                'indian': ['indian', 'curry', 'tandoori', 'biryani', 'masala'],
-                'thai': ['thai', 'pad thai', 'tom yum', 'green curry'],
-                'korean': ['korean', 'bbq', 'bibimbap', 'kimchi', 'bulgogi'],
-                'mexican': ['mexican', 'taco', 'burrito', 'enchilada', 'quesadilla'],
-                'american': ['american', 'burger', 'steak', 'bbq', 'diner'],
-                'french': ['french', 'bistro', 'brasserie', 'crepe', 'croissant'],
-                'mediterranean': ['mediterranean', 'greek', 'lebanese', 'turkish', 'falafel']
-            }
-            
-            keywords = cuisine_keywords.get(cuisine, [cuisine])
-            filtered_results = [r for r in filtered_results 
-                              if any(keyword in r['name'].lower() or 
-                                    any(keyword in t.lower() for t in r.get('types', []))
-                                    for keyword in keywords)]
+            try:
+                cuisine = filters['cuisine'].lower()
+                cuisine_keywords = {
+                    'japanese': ['japanese', 'sushi', 'ramen', 'tempura', 'bento', 'izakaya', 'teppanyaki'],
+                    'chinese': ['chinese', 'dim sum', 'szechuan', 'cantonese', 'peking'],
+                    'italian': ['italian', 'pizza', 'pasta', 'ristorante', 'trattoria'],
+                    'indian': ['indian', 'curry', 'tandoori', 'biryani', 'masala'],
+                    'thai': ['thai', 'pad thai', 'tom yum', 'green curry'],
+                    'korean': ['korean', 'bbq', 'bibimbap', 'kimchi', 'bulgogi'],
+                    'mexican': ['mexican', 'taco', 'burrito', 'enchilada', 'quesadilla'],
+                    'american': ['american', 'burger', 'steak', 'bbq', 'diner'],
+                    'french': ['french', 'bistro', 'brasserie', 'crepe', 'croissant'],
+                    'mediterranean': ['mediterranean', 'greek', 'lebanese', 'turkish', 'falafel'],
+                    'seafood': ['seafood', 'fish', 'crab', 'lobster', 'oyster', 'shrimp', 'prawn']
+                }
+                
+                keywords = cuisine_keywords.get(cuisine, [cuisine])
+                filtered_results = [r for r in filtered_results 
+                                  if any(keyword in r.get('name', '').lower() or 
+                                        any(keyword in t.lower() for t in r.get('types', []))
+                                        for keyword in keywords)]
+                print(f"🔍 Filtered by cuisine '{cuisine}' using keywords: {keywords}")
+            except Exception as e:
+                print(f"❌ Error in cuisine filtering: {str(e)}")
+                # Don't filter by cuisine if there's an error
+                pass
         
         # Filter by price level
         if filters.get('price_level') is not None and filters.get('price_level') != '':
