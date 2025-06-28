@@ -868,10 +868,10 @@
             // Hide loading spinner
             document.getElementById('loading-spinner').style.display = 'none';
             
-            if (data.restaurants && data.restaurants.length > 0) {
-                displayResults(data.restaurants);
-                if (data.log) {
-                    data.log.forEach(log);
+            if (data.results && data.results.length > 0) {
+                displayResults(data.results);
+                if (data.search_log) {
+                    data.search_log.forEach(log);
                 }
             } else {
                 log(`❌ Search failed: ${data.error || 'No results found'}`);
