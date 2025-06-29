@@ -558,10 +558,17 @@ def restaurants():
         # Filter by price level
         if filters.get('price_level') is not None and filters.get('price_level') != '':
             before_price = len(filtered_results)
-            filtered_results = [r for r in filtered_results 
-                              if r.get('price_level') == filters['price_level']]
-            after_price = len(filtered_results)
-            print(f"🔍 Price filter: {before_price} -> {after_price} (price_level: {filters['price_level']})")
+            try:
+                # Convert filter price level to integer to match Google Places API format
+                target_price_level = int(filters['price_level'])
+                filtered_results = [r for r in filtered_results 
+                                  if r.get('price_level') == target_price_level]
+                after_price = len(filtered_results)
+                print(f"🔍 Price filter: {before_price} -> {after_price} (price_level: {target_price_level})")
+            except (ValueError, TypeError) as e:
+                print(f"❌ Error in price filtering: {str(e)}")
+                # Don't filter by price if there's an error
+                pass
         
         print(f"Processed {len(results)} Google Places results")
         print(f"After filtering: {len(filtered_results)} restaurants")
