@@ -510,7 +510,8 @@ def restaurants():
         # Filter by minimum rating
         if filters.get('min_rating', 0) > 0:
             before_rating = len(filtered_results)
-            filtered_results = [r for r in filtered_results if r.get('rating', 0) >= filters['min_rating']]
+            filtered_results = [r for r in filtered_results 
+                              if r.get('rating') is not None and r.get('rating', 0) >= filters['min_rating']]
             after_rating = len(filtered_results)
             print(f"🔍 Rating filter: {before_rating} -> {after_rating} (min_rating: {filters['min_rating']})")
         
